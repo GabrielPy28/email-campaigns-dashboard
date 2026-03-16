@@ -1,0 +1,108 @@
+## Capacidades actuales de la aplicación
+
+- **Autenticación con Supabase**
+  - Login en `/auth/login` validando credenciales directamente contra Supabase Auth.
+  - Generación de JWT con `sub`, `email` y `name`.
+  - Respuesta de login incluye: `id`, `email`, `name` (first_name + last_name o email) y `avatar_url` del usuario de Supabase.
+- **Gestión de plantillas (`/templates`)**
+  - `POST /templates/`: registro de plantilla HTML vía `multipart/form-data` (nombre + archivo `.html`).
+  - `GET /templates/`: listado de todas las plantillas registradas.
+  - `GET /templates/{template_id}`: obtención del detalle de una plantilla (id, nombre, html, created_at).
+- **Gestión de remitentes (`/senders`)**
+  - `POST /senders/`: registro de remitentes con `full_name` y `email`.
+  - `GET /senders/`: listado de remitentes disponibles.
+  - `GET /senders/{sender_id}`: detalle de un remitente.
+- **Modelo de campañas**
+  - Tablas principales: `templates`, `senders`, `campaigns`, `campaign_senders`, `campaign_recipients`, `email_opens`, `email_clicks`, `ip_geolocation_cache`.
+  - `Campaign` incluye: `name`, `template_id`, `sender_id` principal, `scheduled_at`, `timezone`, `wait_min_seconds`, `wait_max_seconds`, `status`, `created_by`, `created_at`.
+  - Relación muchos-a-muchos entre campañas y remitentes (`campaign_senders`) y relación uno-a-muchos con destinatarios (`campaign_recipients`).
+- **Creación y lectura de campañas (`/campaigns`)**
+  - `POST /campaigns/`:
+    - Recibe `template_id` (UUID de plantilla existente).
+    - Recibe `sender_ids` (lista de UUID de remitentes existentes; el primero se toma como remitente principal).
+    - Recibe `recipients`: lista de diccionarios con campos obligatorios `id`, `email`, `nombre`, `username` y campos adicionales libres (`vertical`, `personalized_paragraph`, `followers`, etc.), que se guardan en JSONB.
+    - Valida existencia de plantilla y remitentes; asocia todos los remitentes a la campaña y crea los registros de `campaign_recipients`.
+    - Guarda `created_by` usando el `name` o `email` del usuario autenticado.
+  - `GET /campaigns/`: lista campañas con:
+    - `sender_id`, `sender_name` (principal),
+    - `sender_ids` (todos los remitentes asociados),
+    - `recipients` con sus datos obligatorios + extras.
+  - `GET /campaigns/{campaign_id}`: detalle de una campaña con la misma estructura que en el listado.
+- **Flujo de pre‑envío de campaña**
+  - Endpoint `POST /campaigns/{campaign_id}/prepare-send`:
+    - Valida que la campaña exista y tenga remitentes y destinatarios.
+    - Distribuye los remitentes sobre los destinatarios de forma equitativa (round‑robin) y guarda `sender_id` por cada `campaign_recipient`.
+    - Calcula `scheduled_send_time` por destinatario, empezando en `scheduled_at` y sumando un delta aleatorio entre `wait_min_seconds` y `wait_max_seconds`.
+    - Marca el `status` de cada `campaign_recipient` como `"pending"`.
+- **Tracking de aperturas y clicks**
+  - **Inyección automática en plantillas**:
+    - Función `inject_tracking(html, api_base_url, campaign_id, recipient_id)`:
+      - Reescribe todos los `<a href="http(s)://...">` a URLs de tracking de clicks:
+        - `GET {api_base_url}/track/click?campaign_id=...&recipient_id=...&url=...`
+      - Inyecta un pixel de 1x1 al final del `<body>`:
+        - `<img src="{api_base_url}/track/open/{campaign_id}/{recipient_id}/logo.png" ... />`
+  - **Endpoints de tracking (`/track`)**:
+    - `GET /track/open/{campaign_id}/{recipient_id}/logo.png`:
+      - Registra un `EmailOpen` con `campaign_id`, `recipient_id`, `ip_address`, `user_agent`.
+      - Devuelve un PNG transparente 1x1.
+    - `GET /track/click`:
+      - Recibe `campaign_id`, `recipient_id` y `url` como query params.
+      - Registra un `EmailClick` con `campaign_id`, `recipient_id`, `url`, `ip_address`, `user_agent`.
+      - Redirige (HTTP 302) a la URL original.
+- **Cliente SMTP para envíos de campaña**
+  - Módulo `app/emails/smtp_client.py`:
+    - Función `send_campaign_email(...)`:
+      - Toma la campaña (`Campaign`), el registro de destinatario (`CampaignRecipient`), el remitente (`Sender`) y el `subject`.
+      - Carga el HTML de la plantilla asociada a la campaña.
+      - Aplica `inject_tracking` para inyectar pixel y tracking de links.
+      - Construye un email MIME y lo envía de forma asíncrona usando `aiosmtplib`.
+    - Configuración SMTP genérica mediante variables de entorno:
+      - Desarrollo (por defecto): Gmail (`smtp.gmail.com`, puerto `587`, TLS).
+      - Variables: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`.
+- **Geolocalización de aperturas (ipgeolocation.io + cache)**
+  - Endpoint `GET /reports/campaigns/{campaign_id}/locations`:
+    - Lee todas las IP de `email_opens` para la campaña.
+    - Normaliza y deduplica IPs.
+    - Consulta la tabla `ip_geolocation_cache` para resolver IP -> país (código y nombre).
+    - Para IPs no cacheadas:
+      - Llama a `https://api.ipgeolocation.io/v3/ipgeo?apiKey=...&ip=...` (hasta un máximo de 300 IPs por petición).
+      - Extrae `location.country_code2` y `location.country_name`.
+      - Guarda/actualiza el resultado en `ip_geolocation_cache` con `last_seen_at`.
+    - Cuenta aperturas por país y devuelve un `CampaignLocationsReport` con `country_code`, `country_name` y `count`.
+  - Se configura con la variable de entorno `IPGEOLOCATION_API_KEY`. Si no está definida, todos los países se marcan como `XX / Unknown`.
+- **Infraestructura y arranque**
+  - Proyecto dockerizado (`docker-compose.yml`) con servicios:
+    - `api` (FastAPI), `db` (Postgres 15), `redis`.
+  - Al iniciar la API se crea automáticamente el schema `auth` (si no existe) y todas las tablas definidas en los modelos con `Base.metadata.create_all`.
+  - Endpoint de salud: `GET /health` con información básica de estado, versión y entorno.
+
+---
+
+### Detalle del seguimiento de aperturas de correo
+
+- **Generación del pixel**
+  - Para cada combinación campaña + destinatario, se genera un HTML de correo donde:
+    - Se añade un `<img src="{API_BASE_URL}/track/open/{campaign_id}/{recipient_id}/logo.png" width="1" height="1" />` al final del `<body>`.
+    - Este pixel se carga automáticamente cuando el cliente de correo muestra imágenes.
+- **Registro de la apertura**
+  - El endpoint `GET /track/open/{campaign_id}/{recipient_id}/logo.png`:
+    - Valida que la campaña y el destinatario existan.
+    - Inserta una fila en `email_opens` con:
+      - `campaign_id`
+      - `recipient_id`
+      - `opened_at` (UTC)
+      - `ip_address` del cliente (cabecera `X-Forwarded-For` o `client.host`)
+      - `user_agent`
+    - Devuelve un PNG transparente 1x1 (para el cliente de correo).
+- **Derivación de métricas desde `email_opens`**
+  - Contadores por campaña:
+    - `total_opens`: número total de filas en `email_opens` para esa campaña.
+    - `unique_open_recipients`: número de `recipient_id` distintos con al menos una apertura.
+  - Geo‑reporting:
+    - El endpoint de ubicaciones agrupa `email_opens.ip_address` por país usando la integración con ipgeolocation.io y la cache `ip_geolocation_cache`.
+- **Privacidad**
+  - No se persiguen datos personales adicionales a:
+    - IP + `user_agent` (para geolocalización y estadísticas de dispositivo).
+    - ID interno de destinatario (ya presente en `campaign_recipients`).
+  - Toda la lógica de tracking se limita a métricas agregadas de campañas (aperturas, clics, países, dispositivos).
+

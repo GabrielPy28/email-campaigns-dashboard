@@ -1,0 +1,15 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --purple: #6641ed;
+  --blue: #79bcf7;
+  --pink: #ff47ac;
+  --dark: #0f172a;
+}
+
+body {
+  @apply bg-slate-950 text-slate-50 font-sans;
+}
+
