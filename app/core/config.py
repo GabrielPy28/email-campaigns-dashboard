@@ -48,6 +48,9 @@ class Settings(BaseSettings):
         env="IPGEOLOCATION_API_KEY",
     )
 
+    # CORS (producción: lista de orígenes separados por coma)
+    cors_origins: str = "*"
+
     class Config:
         env_file = ".env"
         env_prefix = ""

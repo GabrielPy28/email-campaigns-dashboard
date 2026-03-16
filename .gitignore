@@ -21,3 +21,5 @@ Thumbs.db
 .cursor/
 
 *.mmdb
+
+DEPLOYMENT.md
