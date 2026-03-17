@@ -77,7 +77,7 @@ async def send_campaign_email(
             "to": [
                 {
                     "email": recipient.email,
-                    "name": recipient.nombre,
+                    "name": recipient.nombre
                 }
             ],
             "subject": subject,
@@ -85,6 +85,10 @@ async def send_campaign_email(
             "htmlContent": html_with_tracking,
             # Tag básico para poder filtrar mensajes de esta campaña en Brevo
             "tags": [str(campaign.id)],
+            "replyTo": {
+                "email": sender.email,
+                "name": sender.full_name
+            }
         }
 
         async with httpx.AsyncClient(timeout=30.0) as client:
