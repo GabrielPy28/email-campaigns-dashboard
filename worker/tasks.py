@@ -4,8 +4,11 @@ import random
 from datetime import datetime, timedelta
 
 from worker.celery_app import celery
+from app.db.migrate import bootstrap_schema
 from app.db.session import SessionLocal
 from app.db import models
+
+bootstrap_schema()
 from app.emails.smtp_client import send_campaign_email
 
 
@@ -62,7 +65,10 @@ def process_email_queue_task(batch_size: int = 50) -> None:
         # 1) Preparar campañas con estado scheduled (la lógica de hora real se aplica en Python).
         campaigns = (
             db.query(models.Campaign)
-            .filter(models.Campaign.status == "scheduled")
+            .filter(
+                models.Campaign.status == "scheduled",
+                models.Campaign.is_test.is_(False),
+            )
             .all()
         )
 
@@ -113,9 +119,11 @@ def process_email_queue_task(batch_size: int = 50) -> None:
         # 2) Seleccionar destinatarios pending listos para envío
         recipients = (
             db.query(models.CampaignRecipient)
+            .join(models.Campaign)
             .filter(
                 models.CampaignRecipient.status == "pending",
                 models.CampaignRecipient.scheduled_send_time <= now,
+                models.Campaign.is_test.is_(False),
             )
             .order_by(models.CampaignRecipient.scheduled_send_time.asc())
             .limit(batch_size)
@@ -156,7 +164,7 @@ def process_email_queue_task(batch_size: int = 50) -> None:
                         campaign=campaign,
                         recipient=rec,
                         sender=sender,
-                        subject=campaign.subject or campaign.name,
+                        subject=campaign.subject,
                         preheader=campaign.preheader,
                     )
                 )

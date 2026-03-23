@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import List
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class RecipientInput(BaseModel):
@@ -42,14 +42,42 @@ class CampaignBase(BaseModel):
 class CampaignCreate(CampaignBase):
     sender_ids: List[UUID] = Field(
         ...,
-        description="Lista de UUIDs de remitentes (uno o más). GET /senders/ para obtener ids.",
+        description="Lista de UUIDs de remitentes (uno o más)",
         min_length=1,
     )
-    recipients: List[RecipientInput] = Field(
-        ...,
-        description="Lista de destinatarios (id, email, nombre, username + opcionales: vertical, personalized_paragraph, followers, etc.)",
-        min_length=1,
+    recipients: List[RecipientInput] | None = Field(
+        default=None,
+        description="Destinatarios manuales (CSV/API)",
     )
+    list_id: UUID | None = Field(
+        default=None,
+        description="UUID de lista de creadores; carga todos los miembros de la lista.",
+    )
+    creator_ids: List[UUID] | None = Field(
+        default=None,
+        description="UUIDs de creadores registrados; se usa creator_to_campaign_recipient por fila.",
+    )
+
+    @field_validator("creator_ids")
+    @classmethod
+    def creator_ids_not_empty_if_present(cls, v: List[UUID] | None) -> List[UUID] | None:
+        if v is None:
+            return None
+        if len(v) < 1:
+            raise ValueError("creator_ids no puede ser una lista vacía.")
+        return v
+
+    @model_validator(mode="after")
+    def exactly_one_recipient_source(self):
+        has_list = self.list_id is not None
+        has_recip = bool(self.recipients and len(self.recipients) > 0)
+        has_creators = bool(self.creator_ids and len(self.creator_ids) > 0)
+        n = sum(1 for x in (has_list, has_recip, has_creators) if x)
+        if n != 1:
+            raise ValueError(
+                "Indique exactamente un origen de destinatarios: list_id, recipients (no vacío) o creator_ids (no vacío)."
+            )
+        return self
 
 
 class CampaignUpdate(BaseModel):
@@ -86,6 +114,10 @@ class CampaignRead(CampaignBase):
     status: str
     created_by: str
     created_at: datetime
+    list_id: str | None = Field(
+        default=None,
+        description="Lista de creadores usada al crear la campaña (si aplica).",
+    )
     sender_id: str = Field(..., description="Remitente principal (primero de la lista)")
     sender_name: str = Field(..., description="Nombre del remitente principal")
     sender_ids: List[str] = Field(default_factory=list, description="Todos los sender IDs de la campaña")

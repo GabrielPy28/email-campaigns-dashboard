@@ -12,6 +12,7 @@ from openpyxl import Workbook
 
 from app.db.session import get_db
 from app.db import models
+from app.lists.creator_utils import creator_to_campaign_recipient
 from app.campaigns.models import (
     CampaignCreate,
     CampaignUpdate,
@@ -54,6 +55,7 @@ def _campaign_to_read(c: models.Campaign) -> CampaignRead:
         status=c.status,
         created_by=c.created_by,
         created_at=c.created_at,
+        list_id=str(c.list_id) if c.list_id else None,
         recipients=recipients,
     )
 
@@ -91,6 +93,46 @@ def create_campaign(
     primary_sender_id = sender_uuids[0]
     created_by = current_user.get("name") or current_user.get("email") or ""
 
+    creators_from_list: list[models.Creator] | None = None
+    creators_by_ids: list[models.Creator] | None = None
+    if payload.list_id is not None:
+        lista = (
+            db.query(models.Lista)
+            .options(
+                joinedload(models.Lista.creators).joinedload(models.Creator.account_profiles),
+            )
+            .filter(models.Lista.id == payload.list_id)
+            .first()
+        )
+        if not lista:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Lista no encontrada. Cree la lista en POST /listas/.",
+            )
+        if not lista.creators:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="La lista no tiene creadores. Añada creadores en POST /listas/{id}/recipients o CSV.",
+            )
+        creators_from_list = sorted(lista.creators, key=lambda c: c.email.lower())
+    elif payload.creator_ids is not None:
+        uuids = list(payload.creator_ids)
+        found = (
+            db.query(models.Creator)
+            .options(joinedload(models.Creator.account_profiles))
+            .filter(models.Creator.id.in_(uuids))
+            .all()
+        )
+        if len(found) != len(uuids):
+            have = {c.id for c in found}
+            missing = [str(uid) for uid in uuids if uid not in have]
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Creador(es) no encontrado(s): {', '.join(missing)}",
+            )
+        order = {uid: i for i, uid in enumerate(uuids)}
+        creators_by_ids = sorted(found, key=lambda c: order.get(c.id, 10**9))
+
     db_campaign = models.Campaign(
         name=payload.name,
         subject=payload.subject,
@@ -102,6 +144,7 @@ def create_campaign(
         wait_min_seconds=payload.wait_min_seconds,
         wait_max_seconds=payload.wait_max_seconds,
         created_by=created_by,
+        list_id=payload.list_id,
     )
     db.add(db_campaign)
     db.flush()
@@ -109,16 +152,23 @@ def create_campaign(
     for sid in sender_uuids:
         db.execute(models.campaign_senders.insert().values(campaign_id=db_campaign.id, sender_id=sid))
 
-    for r in payload.recipients:
-        required, extra = r.to_required_and_extra()
-        db.add(models.CampaignRecipient(
-            campaign_id=db_campaign.id,
-            recipient_id=str(required["id"]),
-            email=required["email"],
-            nombre=required["nombre"],
-            username=required["username"],
-            extra_data=extra,
-        ))
+    if creators_from_list is not None:
+        for creator in creators_from_list:
+            db.add(creator_to_campaign_recipient(db_campaign.id, creator))
+    elif creators_by_ids is not None:
+        for creator in creators_by_ids:
+            db.add(creator_to_campaign_recipient(db_campaign.id, creator))
+    else:
+        for r in payload.recipients or []:
+            required, extra = r.to_required_and_extra()
+            db.add(models.CampaignRecipient(
+                campaign_id=db_campaign.id,
+                recipient_id=str(required["id"]),
+                email=required["email"],
+                nombre=required["nombre"],
+                username=required["username"],
+                extra_data=extra,
+            ))
 
     db.commit()
     db.refresh(db_campaign)
@@ -282,6 +332,10 @@ def list_campaigns(
     template_name: Optional[str] = Query(None, description="Nombre plantilla (contiene)"),
     campaign_id: Optional[str] = Query(None, description="UUID de la campaña"),
     campaign_name: Optional[str] = Query(None, description="Nombre campaña (contiene)"),
+    include_test: bool = Query(
+        False,
+        description="Si es true, incluye envíos de prueba (POST /campaigns-test/send).",
+    ),
 ):
     q = (
         db.query(models.Campaign)
@@ -291,6 +345,8 @@ def list_campaigns(
         )
         .order_by(models.Campaign.created_at.desc())
     )
+    if not include_test:
+        q = q.filter(models.Campaign.is_test.is_(False))
     if scheduled_at_from:
         try:
             q = q.filter(models.Campaign.scheduled_at >= dt.fromisoformat(scheduled_at_from.replace("Z", "+00:00")))
@@ -435,6 +491,7 @@ def export_campaigns_excel(
     template_name: Optional[str] = Query(None),
     campaign_id: Optional[str] = Query(None),
     campaign_name: Optional[str] = Query(None),
+    include_test: bool = Query(False),
 ):
     """Descarga Excel con el listado de campañas (mismos filtros que GET /campaigns/)."""
     rows = list_campaigns(
@@ -453,6 +510,7 @@ def export_campaigns_excel(
         template_name=template_name,
         campaign_id=campaign_id,
         campaign_name=campaign_name,
+        include_test=include_test,
     )
     wb = Workbook()
     ws = wb.active

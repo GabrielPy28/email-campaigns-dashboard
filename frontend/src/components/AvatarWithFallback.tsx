@@ -32,7 +32,7 @@ export function AvatarWithFallback({
         src={avatarUrl}
         alt=""
         role="presentation"
-        className={cn("rounded-full border border-slate-600 object-cover", imageClassName, className)}
+        className={cn("rounded-full border border-slate-200 object-cover", imageClassName, className)}
         onError={() => setLoadFailed(true)}
       />
     );
@@ -41,7 +41,7 @@ export function AvatarWithFallback({
   return (
     <div
       className={cn(
-        "rounded-full border border-slate-600 bg-slate-800 flex items-center justify-center text-slate-200 font-semibold text-sm shrink-0",
+        "rounded-full border border-slate-200/90 bg-gradient-to-br from-purple-50 via-white to-blue-50 flex items-center justify-center text-purple-900 font-semibold text-sm shrink-0 shadow-sm",
         fallbackClassName,
         className
       )}

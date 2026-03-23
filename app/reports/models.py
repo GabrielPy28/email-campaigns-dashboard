@@ -76,9 +76,6 @@ class CampaignClicksByButtonReport(BaseModel):
 
 class BrevoInternalMetricsCompare(BaseModel):
     campaign_id: str
-    # Fechas usadas para la consulta en Brevo (para trazabilidad)
-    start_date: str
-    end_date: str
 
     internal_unique_opens: int
     internal_total_opens: int
@@ -87,5 +84,10 @@ class BrevoInternalMetricsCompare(BaseModel):
     brevo_unique_opens: int
     brevo_total_opens: int
     brevo_total_clicks: int
+    # Mismo periodo/tag que `aggregatedReport` de Brevo (no hay equivalente “interno” sin webhooks)
+    brevo_delivered: int = 0
+    brevo_hard_bounces: int = 0
+    brevo_soft_bounces: int = 0
+    brevo_spam_reports: int = 0
 
 

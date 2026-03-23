@@ -1,16 +1,16 @@
 import os
-import requests
 import uuid
-from datetime import date, datetime
+from datetime import datetime
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import desc, func
 from sqlalchemy.orm import Session
-
+from app.core.client_ip import is_public_routable_ip
+from app.core.ip_country_lookup import resolve_ip_country
 from app.db.session import get_db
 from app.db import models
-from user_agents import parse as parse_user_agent
+from app.tracking.device_category import classify_device_from_user_agent
 
 from app.reports.models import (
     CampaignOpensReport,
@@ -257,17 +257,13 @@ def get_campaign_clicks_by_button(
     )
 
 
-def _device_category(user_agent_str: str | None) -> str:
-    if not user_agent_str:
-        return "other"
-    ua = parse_user_agent(user_agent_str)
-    if ua.is_tablet and not ua.is_mobile:
-        return "tablet"
-    if ua.is_mobile:
-        return "mobile"
-    if ua.is_pc:
-        return "desktop"
-    return "other"
+def _device_for_report_row(
+    stored_category: str | None, user_agent: str | None
+) -> str:
+    """Filas antiguas sin `device_category`: se reclasifica desde UA con la misma lógica que /track."""
+    if stored_category in ("desktop", "mobile", "tablet", "other"):
+        return stored_category
+    return classify_device_from_user_agent(user_agent)
 
 
 @reports_router.get(
@@ -277,7 +273,11 @@ def get_campaign_devices(
     campaign_id: str,
     db: Session = Depends(get_db),
 ):
-    """Desglose de aperturas por tipo de dispositivo (desktop, mobile, tablet, other)."""
+    """
+    Por destinatario: se toma el evento de seguimiento más reciente (apertura o clic)
+    y su `device_category` (guardada en /track/open y /track/click). Filas legacy
+    sin columna rellena se reclasifican con la misma función que el tracking.
+    """
     try:
         cid = uuid.UUID(campaign_id)
     except ValueError:
@@ -289,14 +289,56 @@ def get_campaign_devices(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found"
         )
-    rows = (
-        db.query(models.EmailOpen.user_agent)
+    open_rows = (
+        db.query(
+            models.EmailOpen.recipient_id,
+            models.EmailOpen.opened_at,
+            models.EmailOpen.user_agent,
+            models.EmailOpen.device_category,
+        )
         .filter(models.EmailOpen.campaign_id == cid)
+        .order_by(
+            models.EmailOpen.recipient_id,
+            desc(models.EmailOpen.opened_at),
+        )
+        .distinct(models.EmailOpen.recipient_id)
         .all()
     )
+    click_rows = (
+        db.query(
+            models.EmailClick.recipient_id,
+            models.EmailClick.clicked_at,
+            models.EmailClick.user_agent,
+            models.EmailClick.device_category,
+        )
+        .filter(models.EmailClick.campaign_id == cid)
+        .order_by(
+            models.EmailClick.recipient_id,
+            desc(models.EmailClick.clicked_at),
+        )
+        .distinct(models.EmailClick.recipient_id)
+        .all()
+    )
+
+    best: dict[str, tuple[datetime, str]] = {}
+    for r in open_rows:
+        cat = _device_for_report_row(r.device_category, r.user_agent)
+        ts = r.opened_at
+        rid = r.recipient_id
+        prev = best.get(rid)
+        if prev is None or ts >= prev[0]:
+            best[rid] = (ts, cat)
+
+    for r in click_rows:
+        cat = _device_for_report_row(r.device_category, r.user_agent)
+        ts = r.clicked_at
+        rid = r.recipient_id
+        prev = best.get(rid)
+        if prev is None or ts >= prev[0]:
+            best[rid] = (ts, cat)
+
     counts: dict[str, int] = {"desktop": 0, "mobile": 0, "tablet": 0, "other": 0}
-    for r in rows:
-        cat = _device_category(r.user_agent)
+    for _, cat in best.values():
         counts[cat] = counts.get(cat, 0) + 1
     devices = [DeviceCount(device=k, count=v) for k, v in counts.items()]
     return CampaignDevicesReport(campaign_id=str(cid), devices=devices)
@@ -309,7 +351,7 @@ def get_campaign_locations(
     campaign_id: str,
     db: Session = Depends(get_db),
 ):
-    """Aperturas por país (código ISO). Requiere GeoLite2-Country.mmdb (env GEOIP2_COUNTRY_DB)."""
+    """Eventos por país (aperturas + clics): agrupa IPs de `email_opens` y `email_clicks`."""
     try:
         cid = uuid.UUID(campaign_id)
     except ValueError:
@@ -321,24 +363,33 @@ def get_campaign_locations(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found"
         )
-    rows = (
+    open_rows = (
         db.query(models.EmailOpen.ip_address)
-        .filter(models.EmailOpen.campaign_id == cid, models.EmailOpen.ip_address.isnot(None))
+        .filter(
+            models.EmailOpen.campaign_id == cid,
+            models.EmailOpen.ip_address.isnot(None),
+        )
+        .all()
+    )
+    click_rows = (
+        db.query(models.EmailClick.ip_address)
+        .filter(
+            models.EmailClick.campaign_id == cid,
+            models.EmailClick.ip_address.isnot(None),
+        )
         .all()
     )
     country_counts: dict[str, int] = {}
     country_names: dict[str, str] = {}
 
-    api_key = os.getenv("IPGEOLOCATION_API_KEY")
-
-    # Normalizamos IPs y eliminamos duplicados
+    # IPs únicas a resolver (aperturas + clics)
     ips = {
         (r.ip_address or "").strip()
-        for r in rows
+        for r in (*open_rows, *click_rows)
         if (r.ip_address or "").strip()
     }
 
-    # 1) Cargar cache existente para estas IPs
+    # 1) Caché existente
     if ips:
         cached = (
             db.query(models.IpGeolocationCache)
@@ -352,66 +403,35 @@ def get_campaign_locations(
         c.ip: (c.country_code, c.country_name) for c in cached
     }
 
-    # 2) Resolver IPs faltantes contra la API, con límite de peticiones
-    missing_ips = [ip for ip in ips if ip not in cache_map and not ip.startswith("127.") and ip != "::1"]
-    max_api_lookups = 300
-    looked_up = 0
+    # 2) Faltantes: MaxMind local (GEOIP2_*) y/o ipgeolocation.io (máx. 300 HTTP/campaña)
+    missing_ips = [
+        ip for ip in ips if ip not in cache_map and is_public_routable_ip(ip)
+    ]
+    http_budget = [300]
+    for ip in missing_ips:
+        code, name = resolve_ip_country(db, ip, http_budget=http_budget)
+        cache_map[ip] = (code, name)
 
-    if api_key:
-        for ip in missing_ips:
-            if looked_up >= max_api_lookups:
-                break
-            try:
-                resp = requests.get(
-                    "https://api.ipgeolocation.io/v3/ipgeo",
-                    params={"apiKey": api_key, "ip": ip},
-                    timeout=3,
-                )
-                if resp.ok:
-                    data = resp.json()
-                    loc = data.get("location") or {}
-                    code = (loc.get("country_code2") or "XX").upper()
-                    name = loc.get("country_name") or code
-                else:
-                    code = "XX"
-                    name = "Unknown"
-            except Exception:
-                code = "XX"
-                name = "Unknown"
+    if missing_ips:
+        db.commit()
 
-            cache_map[ip] = (code, name)
-            looked_up += 1
-
-            # Guardar/actualizar en cache
-            existing = next((c for c in cached if c.ip == ip), None)
-            if existing:
-                existing.country_code = code
-                existing.country_name = name
-                existing.last_seen_at = datetime.utcnow()
-            else:
-                db.add(
-                    models.IpGeolocationCache(
-                        ip=ip,
-                        country_code=code,
-                        country_name=name,
-                        last_seen_at=datetime.utcnow(),
-                    )
-                )
-
-        if looked_up > 0:
-            db.commit()
-
-    # 3) Contabilizar todos los opens usando cache + reglas locales
-    for r in rows:
-        ip = (r.ip_address or "").strip()
-        if not ip or ip.startswith("127.") or ip == "::1":
-            code, name = "XX", "Local"
+    # 3) Contabilizar cada apertura y cada clic (misma IP -> mismo país en cache)
+    def _count_ip(ip_raw: str | None) -> None:
+        ip = (ip_raw or "").strip()
+        if not ip:
+            code, name = "XX", "Unknown"
+        elif not is_public_routable_ip(ip):
+            code, name = "XX", "Private / non-routable"
         else:
             code, name = cache_map.get(ip, ("XX", "Unknown"))
-
         country_counts[code] = country_counts.get(code, 0) + 1
         if code not in country_names:
             country_names[code] = name
+
+    for r in open_rows:
+        _count_ip(r.ip_address)
+    for r in click_rows:
+        _count_ip(r.ip_address)
     locations = [
         LocationCount(country_code=code, country_name=country_names.get(code, code), count=n)
         for code, n in sorted(country_counts.items(), key=lambda x: -x[1])
@@ -425,21 +445,15 @@ def get_campaign_locations(
 )
 def compare_internal_with_brevo(
     campaign_id: str,
-    start_date: str = Query(
-        default_factory=lambda: date.today().isoformat(),
-        description="Fecha inicio (YYYY-MM-DD) para consultar estadísticas en Brevo",
-    ),
-    end_date: str = Query(
-        default_factory=lambda: date.today().isoformat(),
-        description="Fecha fin (YYYY-MM-DD) para consultar estadísticas en Brevo",
-    ),
     db: Session = Depends(get_db),
 ):
     """
     Compara métricas internas vs métricas de Brevo para una campaña:
-    - Aperturas únicas, aperturas totales, clicks totales.
+    - Aperturas / clics: internos (BD) vs Brevo.
+    - Entrega / rebotes / spam: solo Brevo (`aggregatedReport`); la app no los
+      infiere por opens; para estado por destinatario hace falta webhook + guardar eventos.
 
-    Brevo: se consulta `GET /v3/smtp/statistics/reports` filtrando por tag = campaign_id.
+    Brevo: `GET /v3/smtp/statistics/aggregatedReport` con `tag` y `days=31`.
     """
     try:
         cid = uuid.UUID(campaign_id)
@@ -484,20 +498,17 @@ def compare_internal_with_brevo(
             detail="Brevo API key not configured (BREVO_HTTP_API_KEY / BREVO_API_KEY).",
         )
 
-    params = {
-        "startDate": start_date,
-        "endDate": end_date,
-        "tag": str(campaign.id),
-    }
-
     try:
         resp = httpx.get(
-            "https://api.brevo.com/v3/smtp/statistics/reports",
+            "https://api.brevo.com/v3/smtp/statistics/aggregatedReport",
             headers={
                 "accept": "application/json",
                 "api-key": brevo_api_key,
             },
-            params=params,
+            params={
+                "tag": str(campaign.id),
+                "days": 31,
+            },
             timeout=30.0,
         )
     except httpx.HTTPError as exc:
@@ -513,26 +524,25 @@ def compare_internal_with_brevo(
         )
 
     data = resp.json()
-    reports = data.get("reports") or []
-    if reports:
-        # Agregamos por si Brevo devolviera varias fechas en el rango
-        brevo_total_opens = sum(int(r.get("opens", 0)) for r in reports)
-        brevo_unique_opens = sum(int(r.get("uniqueOpens", 0)) for r in reports)
-        brevo_total_clicks = sum(int(r.get("clicks", 0)) for r in reports)
-    else:
-        brevo_total_opens = 0
-        brevo_unique_opens = 0
-        brevo_total_clicks = 0
+    brevo_total_opens = int(data.get("opens") or 0)
+    brevo_unique_opens = int(data.get("uniqueOpens") or 0)
+    brevo_total_clicks = int(data.get("clicks") or 0)
+    brevo_delivered = int(data.get("delivered") or 0)
+    brevo_hard_bounces = int(data.get("hardBounces") or 0)
+    brevo_soft_bounces = int(data.get("softBounces") or 0)
+    brevo_spam_reports = int(data.get("spamReports") or 0)
 
     return BrevoInternalMetricsCompare(
         campaign_id=str(cid),
-        start_date=start_date,
-        end_date=end_date,
         internal_unique_opens=internal_unique_opens,
         internal_total_opens=internal_total_opens,
         internal_total_clicks=int(internal_total_clicks),
         brevo_unique_opens=brevo_unique_opens,
         brevo_total_opens=brevo_total_opens,
         brevo_total_clicks=brevo_total_clicks,
+        brevo_delivered=brevo_delivered,
+        brevo_hard_bounces=brevo_hard_bounces,
+        brevo_soft_bounces=brevo_soft_bounces,
+        brevo_spam_reports=brevo_spam_reports,
     )
 

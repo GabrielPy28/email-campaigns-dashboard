@@ -3,9 +3,14 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import Editor from "@monaco-editor/react";
 import type * as Monaco from "monaco-editor";
 import Swal from "sweetalert2";
+import { HiOutlineEye, HiOutlinePaperAirplane } from "react-icons/hi2";
 import { fetchTemplate, updateTemplate } from "../../lib/api";
 import { Button } from "../../components/ui/button";
-import { TEMPLATE_VARIABLES } from "../../lib/templateVariables";
+import { TemplateCtaTrackingNote } from "../../components/templates/TemplateCtaTrackingNote";
+import { TemplatePreviewModal } from "../../components/templates/TemplatePreviewModal";
+import { TemplateTestSendModal } from "../../components/templates/TemplateTestSendModal";
+import { TemplateVariablePicker } from "../../components/templates/TemplateVariablePicker";
+import { useViewportEditorHeight } from "../../hooks/useViewportEditorHeight";
 
 export function EditarPlantillaPage() {
   const { id } = useParams<{ id: string }>();
@@ -15,7 +20,10 @@ export function EditarPlantillaPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [testModalOpen, setTestModalOpen] = useState(false);
+  const [previewModalOpen, setPreviewModalOpen] = useState(false);
   const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
+  const editorHeight = useViewportEditorHeight({ min: 520, max: 960, ratio: 0.62 });
 
   function insertVariable(expression: string) {
     const editor = editorRef.current;
@@ -89,163 +97,144 @@ export function EditarPlantillaPage() {
   }
 
   return (
-    <div className="p-6 sm:p-8 min-h-full bg-gradient-to-b from-slate-50 to-indigo-50/20">
-      <nav className="text-sm text-slate-600 mb-2">
-        <Link
-          to="/dashboard/plantillas"
-          className="text-violet-600 hover:text-violet-700 font-medium hover:underline"
-        >
-          Plantillas
-        </Link>
-        <span className="mx-2 text-slate-400">/</span>
-        <span className="text-slate-800 font-medium">Editar plantilla</span>
-      </nav>
-      <h1 className="text-2xl font-bold text-slate-800 mb-6">
-        <span className="text-amber-600">Editar</span> plantilla
-      </h1>
-
-      {error && (
-        <div className="mb-4 p-4 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-sm">
-          {error}
-        </div>
-      )}
-
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="rounded-xl border border-violet-200/60 bg-white p-4 shadow-sm max-w-3xl">
-          <label className="block text-sm font-medium text-violet-700 mb-2">Nombre (opcional)</label>
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Ej. Newsletter marzo 2026"
-            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-violet-400 focus:border-violet-400"
-          />
-        </div>
-
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-          <div className="rounded-xl border border-violet-200/60 bg-white p-4 shadow-sm">
-            <label className="block text-sm font-medium text-violet-700 mb-2">Contenido HTML *</label>
-            <div className="rounded-lg border border-slate-300 overflow-hidden min-h-[420px]">
-              <Editor
-                height="420px"
-                language="html"
-                value={htmlContent}
-                onChange={(v) => setHtmlContent(v ?? "")}
-                onMount={(editor) => {
-                  editorRef.current = editor;
-                }}
-                theme="light"
-                options={{
-                  minimap: { enabled: false },
-                  fontSize: 13,
-                  padding: { top: 12 },
-                  wordWrap: "on",
-                  scrollBeyondLastLine: false,
-                }}
-                loading={
-                  <div className="flex items-center justify-center h-[420px] text-slate-500 text-sm">
-                    Cargando editor…
-                  </div>
-                }
-              />              
-            </div>
-            <br style={{ marginBottom: "10px" }} />
-            {/* Etiquetas dinámicas */}
-            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                <p className="text-sm font-semibold text-slate-800 mb-2">Etiquetas de contenido dinámico</p>
-                <p className="text-sm text-slate-600 mb-3 leading-relaxed">
-                  Para personalizar aún más tu página, puedes usar pequeñas &quot;etiquetas especiales&quot; que funcionan como
-                  bloques de contenido dinámico.
-                </p>
-                <p className="text-sm text-slate-600 mb-3 leading-relaxed">
-                  Solo tienes que escribir la etiqueta que necesitas o hacer clic en una de la lista y automáticamente
-                  aparecerá en el lugar donde tengas el cursor dentro del editor.
-                </p>
-                <div className="rounded-lg border border-slate-200 bg-slate-50/50 overflow-hidden">
-                  <ul className="divide-y divide-slate-200 max-h-44 overflow-y-auto">
-                    {TEMPLATE_VARIABLES.map((v) => (
-                      <li key={v.column}>
-                        <button
-                          type="button"
-                          onClick={() => insertVariable(v.expression)}
-                          className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-violet-50/80 transition-colors group"
-                        >
-                          <span className="text-slate-600 group-hover:text-violet-700">{v.description}</span>
-                          <code className="text-xs font-mono text-violet-600 bg-violet-50 px-1.5 py-0.5 rounded shrink-0">
-                            {v.expression}
-                          </code>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-          </div>
-          <div className="space-y-4">
-            {/* Vista desktop */}
-            <div className="rounded-xl border-2 border-indigo-200 bg-white overflow-hidden shadow-sm">
-              <div className="px-3 py-2 bg-gradient-to-r from-indigo-500 to-violet-500 text-white text-xs font-semibold uppercase tracking-wider">
-                Vista desktop
-              </div>
-              <div className="border-t border-slate-200 bg-white overflow-auto min-h-[400px] max-h-[420px]">
-                {htmlContent.trim() ? (
-                  <iframe
-                    title="Vista previa desktop"
-                    srcDoc={htmlContent}
-                    className="w-full min-h-[400px] border-0 block"
-                    sandbox="allow-same-origin"
-                  />
-                ) : (
-                  <div className="flex items-center justify-center h-[400px] text-slate-400 text-sm">
-                    Escribe o pega HTML para ver la vista previa
-                  </div>
-                )}
-              </div>
-            </div>
-            {/* Vista móvil */}
-            <div className="rounded-xl border-2 border-emerald-200 bg-white overflow-hidden shadow-sm">
-              <div className="px-3 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white text-xs font-semibold uppercase tracking-wider">
-                Vista móvil
-              </div>
-              <div className="border-t border-slate-200 bg-slate-100/80 p-4 flex justify-center">
-                <div className="w-[375px] max-w-full rounded-lg border-4 border-slate-300 bg-white shadow-lg overflow-hidden flex flex-col">
-                  <div className="bg-slate-400 h-2 w-12 mx-auto rounded-full my-1.5 flex-shrink-0" />
-                  <div className="overflow-auto flex-1 min-h-[320px]">
-                    {htmlContent.trim() ? (
-                      <iframe
-                        title="Vista previa móvil"
-                        srcDoc={htmlContent}
-                        className="w-full min-h-[400px] border-0 block"
-                        style={{ minWidth: "375px" }}
-                        sandbox="allow-same-origin"
-                      />
-                    ) : (
-                      <div className="flex items-center justify-center h-[320px] text-slate-400 text-xs">
-                        Vista previa
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex gap-3">
-          <Button
-            type="submit"
-            disabled={submitting}
-            className="bg-violet-600 hover:bg-violet-700 text-white border-0"
+    <>
+      <div className="p-6 sm:p-8 min-h-full bg-gradient-to-b from-slate-50 to-indigo-50/20">
+        <nav className="text-sm text-slate-600 mb-2">
+          <Link
+            to="/dashboard/plantillas"
+            className="text-violet-600 hover:text-violet-700 font-medium hover:underline"
           >
-            {submitting ? "Guardando…" : "Guardar cambios"}
-          </Button>
-          <Link to="/dashboard/plantillas">
-            <Button type="button" variant="ghost" className="border border-slate-300 text-slate-700">
-              Cancelar
-            </Button>
+            Plantillas
           </Link>
+          <span className="mx-2 text-slate-400">/</span>
+          <span className="text-slate-800 font-medium">Editar plantilla</span>
+        </nav>
+
+        <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <h1 className="text-2xl font-bold text-slate-800 shrink-0">
+            <span className="text-amber-600">Editar</span> plantilla
+          </h1>
+          <div className="flex flex-wrap gap-2 lg:justify-end">
+            <Button
+              type="button"
+              onClick={() => setPreviewModalOpen(true)}
+              className="inline-flex items-center gap-2 border border-violet-200 bg-white text-violet-800 shadow-sm hover:bg-violet-50"
+            >
+              <HiOutlineEye className="h-4 w-4" aria-hidden />
+              Vista previa
+            </Button>
+            <Button
+              type="button"
+              onClick={() => setTestModalOpen(true)}
+              className="inline-flex items-center gap-2 bg-amber-600 text-white hover:bg-amber-700 border-0 shadow-sm"
+            >
+              <HiOutlinePaperAirplane className="h-4 w-4" aria-hidden />
+              Enviar prueba
+            </Button>
+          </div>
         </div>
-      </form>
-    </div>
+
+        {error && (
+          <div className="mb-4 p-4 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-sm max-w-[min(96rem,100%)] mx-auto">
+            {error}
+          </div>
+        )}
+
+        <form
+          onSubmit={handleSubmit}
+          className="space-y-6 w-full max-w-[min(96rem,100%)] mx-auto"
+        >
+          <div className="rounded-xl border border-violet-200/60 bg-white p-4 shadow-sm">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between sm:gap-6">
+              <div className="min-w-0 flex-1">
+                <label className="block text-sm font-medium text-violet-700 mb-2">Nombre (opcional)</label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Ej. Newsletter marzo 2026"
+                  className="w-full max-w-2xl sm:max-w-none rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-violet-400 focus:border-violet-400"
+                />
+              </div>
+              <div className="flex flex-wrap gap-2 justify-end shrink-0 sm:pb-0.5">
+                <Button
+                  type="submit"
+                  disabled={submitting}
+                  className="bg-violet-600 hover:bg-violet-700 text-white border-0"
+                >
+                  {submitting ? "Guardando…" : "Guardar cambios"}
+                </Button>
+                <Link to="/dashboard/plantillas">
+                  <Button type="button" variant="ghost" className="border border-slate-300 text-slate-700 bg-white">
+                    Cancelar
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_min(22rem,32vw)] xl:gap-8 xl:items-start">
+            <div className="space-y-4 min-w-0">
+              <div className="rounded-xl border border-violet-200/60 bg-white p-4 sm:p-5 shadow-sm">
+                <div className="flex flex-wrap items-baseline justify-between gap-2 mb-3">
+                  <label className="text-sm font-medium text-violet-700">Contenido HTML *</label>
+                  <span className="text-xs text-slate-500">Editor amplio · vista previa en el botón superior</span>
+                </div>
+                <div className="rounded-lg border border-slate-300 overflow-hidden bg-slate-50/30">
+                  <Editor
+                    height={editorHeight}
+                    language="html"
+                    value={htmlContent}
+                    onChange={(v) => setHtmlContent(v ?? "")}
+                    onMount={(editor) => {
+                      editorRef.current = editor;
+                    }}
+                    theme="light"
+                    options={{
+                      minimap: { enabled: false },
+                      fontSize: 13,
+                      lineNumbers: "on",
+                      padding: { top: 14 },
+                      wordWrap: "on",
+                      scrollBeyondLastLine: false,
+                      automaticLayout: true,
+                    }}
+                    loading={
+                      <div
+                        className="flex items-center justify-center text-slate-500 text-sm bg-white"
+                        style={{ minHeight: editorHeight }}
+                      >
+                        Cargando editor…
+                      </div>
+                    }
+                  />
+                </div>
+              </div>
+              <TemplateCtaTrackingNote />
+            </div>
+
+            <aside className="min-w-0 xl:sticky xl:top-4 xl:self-start xl:max-h-[calc(100vh-5rem)] xl:flex xl:flex-col">
+              <TemplateVariablePicker
+                onInsert={insertVariable}
+                className="xl:flex-1 xl:min-h-0 xl:flex xl:flex-col xl:overflow-hidden"
+                scrollMaxHeightClassName="max-h-[min(36rem,62vh)] xl:max-h-[calc(100vh-12rem)] xl:flex-1 xl:min-h-0"
+              />
+            </aside>
+          </div>
+        </form>
+      </div>
+
+      <TemplateTestSendModal
+        open={testModalOpen}
+        onClose={() => setTestModalOpen(false)}
+        templateHtml={htmlContent}
+        disabled={submitting}
+      />
+      <TemplatePreviewModal
+        open={previewModalOpen}
+        onClose={() => setPreviewModalOpen(false)}
+        html={htmlContent}
+      />
+    </>
   );
 }

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { motion } from "framer-motion";
 import Swal from "sweetalert2";
 import {
   fetchCampaigns,
@@ -49,14 +50,83 @@ import {
 } from "recharts";
 
 const PER_PAGE = 50;
-const COLORS = ["#6366f1", "#0ea5e9", "#ec4899", "#64748b"];
-const CHART_GRID = "rgba(148, 163, 184, 0.25)";
-const TOOLTIP_BG = "rgba(255, 255, 255, 0.98)";
+
+/** Tokens visuales (alineados al sidebar: claros + acentos de métrica) */
+const DASH = {
+  muted: "#64748b",
+  text: "#0f172a",
+  primary: "#6366f1",
+  secondary: "#22c55e",
+  danger: "#ef4444",
+  accent: "#f59e0b",
+} as const;
+
+const SERIES_COLORS = [
+  DASH.primary,
+  "#0ea5e9",
+  DASH.accent,
+  "#8b5cf6",
+  DASH.secondary,
+  "#94a3b8",
+];
+const CHART_GRID = "rgba(148, 163, 184, 0.22)";
+const CHART_AXIS = "#94a3b8";
+const TOOLTIP_STYLE = {
+  background: "rgba(255, 255, 255, 0.98)",
+  border: "1px solid rgb(226 232 240)",
+  borderRadius: 12,
+  color: DASH.text,
+  boxShadow: "0 14px 40px rgba(15, 23, 42, 0.1)",
+};
 
 const MESES = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
   "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
 ];
+
+/** Misma familia que las tarjetas del sidebar (blanco + borde slate suave) */
+const cardSurface = cn(
+  "rounded-2xl border border-slate-200/90 bg-white/95 shadow-sm shadow-slate-200/70",
+  "backdrop-blur-sm transition-shadow duration-300 hover:shadow-md hover:shadow-slate-300/45"
+);
+
+function KpiCard({
+  label,
+  value,
+  hint,
+  tone,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  tone: "primary" | "secondary" | "accent" | "muted";
+}) {
+  const accent =
+    tone === "primary"
+      ? DASH.primary
+      : tone === "secondary"
+        ? DASH.secondary
+        : tone === "accent"
+          ? DASH.accent
+          : "#94a3b8";
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35 }}
+      whileHover={{ y: -3 }}
+      className={cn(
+        cardSurface,
+        "p-5 min-h-[108px] flex flex-col justify-between"
+      )}
+      style={{ borderLeftWidth: 3, borderLeftColor: accent }}
+    >
+      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">{label}</p>
+      <p className="text-2xl sm:text-3xl font-semibold tabular-nums text-slate-900 tracking-tight">{value}</p>
+      {hint ? <p className="text-xs text-slate-500 mt-1">{hint}</p> : null}
+    </motion.div>
+  );
+}
 
 function formatSentAt(iso: string | null): string {
   if (!iso) return "—";
@@ -129,16 +199,12 @@ export function CampanasPage() {
       return;
     }
     setLoadingDetail(true);
-    const campaign = campaigns.find((c) => c.id === selectedId);
-    const sentAt = campaign?.sent_at ? new Date(campaign.sent_at) : new Date();
-    const dateStr = sentAt.toISOString().slice(0, 10);
-
     Promise.all([
       fetchCampaignOpens(selectedId),
       fetchCampaignClicks(selectedId),
       fetchCampaignClicksByRecipient(selectedId),
       fetchCampaignClicksByButton(selectedId),
-      fetchBrevoCompare(selectedId, dateStr, dateStr).catch(() => null),
+      fetchBrevoCompare(selectedId).catch(() => null),
       fetchCampaignDevices(selectedId),
       fetchCampaignLocations(selectedId),
     ])
@@ -174,11 +240,7 @@ export function CampanasPage() {
     }
   };
 
-  const maxRecipientsAll = campaigns.length
-    ? Math.max(1, ...campaigns.map((c) => c.num_recipients))
-    : 1;
   const selectedCampaign = selectedId ? campaigns.find((c) => c.id === selectedId) : null;
-  const maxRecipientsCampaign = selectedCampaign?.num_recipients ?? maxRecipientsAll;
 
   const handleEditDraft = (id: string) => {
     // Navega al formulario de nueva campaña pasando el ID a editar.
@@ -211,243 +273,122 @@ export function CampanasPage() {
     }
   };
 
+  const tickMuted = { fill: DASH.muted, fontSize: 11 };
+  const kpiRecipients =
+    opensReport?.total_recipients ?? selectedCampaign?.num_recipients ?? null;
+  const kpiUniqueOpens = opensReport?.unique_open_recipients ?? null;
+  const kpiTotalOpenEvents = opensReport?.total_opens ?? null;
+  const kpiOpenRateHint =
+    kpiRecipients && kpiRecipients > 0 && kpiUniqueOpens != null
+      ? `${((kpiUniqueOpens / kpiRecipients) * 100).toFixed(1)}% del envío abrió al menos una vez`
+      : selectedCampaign
+        ? `${selectedCampaign.open_rate_pct}% según listado de campañas`
+        : undefined;
+  const kpiClicksHint =
+    selectedCampaign != null ? `CTR listado ${selectedCampaign.click_rate_pct}%` : undefined;
+
+  const chartLegendStyle = { fontSize: 11, color: DASH.muted };
+
   return (
-    <div className="p-6 sm:p-8 space-y-6 bg-slate-50/50 min-h-full">
-      <h1 className="text-2xl font-bold text-slate-800">
-        <span className="text-indigo-600">Campañas</span>
-      </h1>
-
-      {/* Row 1: Gráficos */}
-      <div className="space-y-4">
-        <h2 className="text-lg font-semibold text-slate-700">
-          <span className="text-indigo-600">Rendimiento</span>
-          <span className="text-slate-600"> e </span>
-          <span className="text-sky-600">Impacto</span>
-        </h2>
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-4">
-          {/* Interno vs Brevo: Aperturas y Clics */}
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm min-h-[280px]">
-            <p className="text-xs font-medium text-indigo-600 uppercase tracking-wider mb-3">
-              Interno vs Brevo (Aperturas y Clics)
-            </p>
-            {!selectedId ? (
-              <div className="h-52 flex items-center justify-center text-slate-500 text-sm">
-                Selecciona una campaña
-              </div>
-            ) : loadingDetail ? (
-              <div className="h-52 flex items-center justify-center text-slate-500 text-sm">Cargando…</div>
-            ) : brevoCompare ? (
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart
-                  data={[
-                    {
-                      name: "Aperturas",
-                      Interno: brevoCompare.internal_total_opens,
-                      Brevo: brevoCompare.brevo_total_opens,
-                    },
-                    {
-                      name: "Clics",
-                      Interno: brevoCompare.internal_total_clicks,
-                      Brevo: brevoCompare.brevo_total_clicks,
-                    },
-                  ]}
-                  margin={{ top: 8, right: 12, left: 0, bottom: 0 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} />
-                  <XAxis
-                    dataKey="name"
-                    tick={{ fill: "#475569", fontSize: 10 }}
-                    stroke="#64748b"
-                  />
-                  <YAxis tick={{ fill: "#475569", fontSize: 10 }} stroke="#64748b" domain={[0, "auto"]} />
-                  <Tooltip
-                    contentStyle={{
-                      background: TOOLTIP_BG,
-                      border: "1px solid #e2e8f0",
-                      borderRadius: 8,
-                      color: "#1e293b",
-                    }}
-                    formatter={(value, name) => [`${value}`, name]}
-                  />
-                  <Legend
-                    wrapperStyle={{ fontSize: 11 }}
-                    formatter={(value) => <span className="text-slate-600">{value}</span>}
-                  />
-                  <Bar dataKey="Interno" fill="#6366f1" radius={[4, 4, 0, 0]} name="Interno" />
-                  <Bar dataKey="Brevo" fill="#0ea5e9" radius={[4, 4, 0, 0]} name="Brevo" />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-52 flex items-center justify-center text-slate-500 text-sm">
-                Brevo no disponible o sin datos
-              </div>
-            )}
+    <div className="min-h-full text-slate-800 bg-slate-50">
+      <div className="mx-auto max-w-[1600px] px-4 sm:px-8 py-8 space-y-8">
+        <motion.header
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+          className="space-y-2"
+        >
+          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+            Dashboard
+          </p>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight text-slate-900">Campañas</h1>
+              <p className="mt-1 max-w-2xl text-sm text-slate-600">
+                {selectedCampaign ? (
+                  <>
+                    Analizando{" "}
+                    <span className="font-medium text-indigo-600">{selectedCampaign.name}</span>
+                    {" — "}
+                    rendimiento por destinatario, dispositivo y geografía.
+                  </>
+                ) : (
+                  <>
+                    Selecciona una campaña en la tabla para ver KPIs y gráficos. Abajo, el listado
+                    completo para profundizar.
+                  </>
+                )}
+              </p>
+            </div>
           </div>
+        </motion.header>
 
-          {/* Dispositivos */}
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm min-h-[280px]">
-            <p className="text-xs font-medium text-sky-600 uppercase tracking-wider mb-3">Dispositivos</p>
-            {!selectedId ? (
-              <div className="h-52 flex items-center justify-center text-slate-500 text-sm">
-                Selecciona una campaña
-              </div>
-            ) : loadingDetail ? (
-              <div className="h-52 flex items-center justify-center text-slate-500 text-sm">Cargando…</div>
-            ) : devicesReport && devicesReport.devices.some((d) => d.count > 0) ? (
-              <ResponsiveContainer width="100%" height={220}>
-                <PieChart>
-                  <Pie
-                    data={devicesReport.devices}
-                    dataKey="count"
-                    nameKey="device"
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={50}
-                    outerRadius={75}
-                    paddingAngle={2}
-                    stroke="rgba(15,23,42,0.6)"
-                  >
-                    {devicesReport.devices.map((_, i) => (
-                      <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    contentStyle={{ background: TOOLTIP_BG, border: "1px solid #e2e8f0", borderRadius: 8, color: "#1e293b" }}
-                    formatter={(value: number, name: string) => [value, name]}
-                  />
-                  <Legend
-                    wrapperStyle={{ fontSize: 11 }}
-                    formatter={(value) => <span className="text-slate-600">{value}</span>}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-52 flex items-center justify-center text-slate-500 text-sm">Sin datos</div>
-            )}
-          </div>
-
-          {/* Aperturas por país */}
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm min-h-[280px]">
-            <p className="text-xs font-medium text-sky-600 uppercase tracking-wider mb-3">
-              Aperturas por país
-            </p>
-            {!selectedId ? (
-              <div className="h-52 flex items-center justify-center text-slate-500 text-sm">
-                Selecciona una campaña
-              </div>
-            ) : loadingDetail ? (
-              <div className="h-52 flex items-center justify-center text-slate-500 text-sm">Cargando…</div>
-            ) : locationsReport && locationsReport.locations.length > 0 ? (
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart
-                  data={locationsReport.locations.slice(0, 6)}
-                  layout="vertical"
-                  margin={{ left: 0, right: 16, top: 4, bottom: 4 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} horizontal={false} />
-                  <XAxis
-                    type="number"
-                    domain={[1, maxRecipientsCampaign]}
-                    tick={{ fill: "#475569", fontSize: 10 }}
-                    stroke="#64748b"
-                  />
-                  <YAxis
-                    type="category"
-                    dataKey="country_code"
-                    width={36}
-                    tick={{ fill: "#475569", fontSize: 10 }}
-                    stroke="#64748b"
-                  />
-                  <Tooltip
-                    contentStyle={{ background: TOOLTIP_BG, border: "1px solid #e2e8f0", borderRadius: 8, color: "#1e293b" }}
-                    content={({ active, payload }) =>
-                      active && payload?.[0] ? (
-                        <div
-                          className="rounded-lg border border-slate-200 px-3 py-2 text-xs shadow-lg text-slate-700"
-                          style={{ background: TOOLTIP_BG }}
-                        >
-                          <span>
-                            {(payload[0].payload as LocationCount).country_name ||
-                              (payload[0].payload as LocationCount).country_code}
-                          </span>
-                          <span className="text-indigo-600 font-semibold ml-2">{payload[0].value}</span>
-                        </div>
-                      ) : null
-                    }
-                  />
-                  <Bar dataKey="count" fill="#0ea5e9" radius={[0, 4, 4, 0]} name="Aperturas" />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-52 flex items-center justify-center text-slate-500 text-sm">Sin datos</div>
-            )}
-          </div>
-
-          {/* Benchmarking: clics por botón de la plantilla */}
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm min-h-[280px]">
-            <p className="text-xs font-medium text-violet-600 uppercase tracking-wider mb-3">
-              Benchmarking (Clics por botón)
-            </p>
-            {!selectedId ? (
-              <div className="h-52 flex items-center justify-center text-slate-500 text-sm">
-                Selecciona una campaña
-              </div>
-            ) : loadingDetail ? (
-              <div className="h-52 flex items-center justify-center text-slate-500 text-sm">Cargando…</div>
-            ) : clicksByButtonReport && clicksByButtonReport.buttons.length > 0 ? (
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart
-                  data={clicksByButtonReport.buttons.map((b) => ({
-                    name: b.button_id.length > 14 ? `${b.button_id.slice(0, 12)}…` : b.button_id,
-                    clicks: b.clicks,
-                  }))}
-                  margin={{ top: 8, right: 12, left: 0, bottom: 24 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} />
-                  <XAxis
-                    dataKey="name"
-                    tick={{ fill: "#475569", fontSize: 10 }}
-                    stroke="#64748b"
-                    angle={-35}
-                    textAnchor="end"
-                    height={44}
-                    interval={0}
-                  />
-                  <YAxis
-                    tick={{ fill: "#475569", fontSize: 10 }}
-                    stroke="#64748b"
-                    label={{ value: "Clics", angle: -90, position: "insideLeft", fill: "#475569", fontSize: 10 }}
-                    domain={[0, "auto"]}
-                  />
-                  <Tooltip
-                    contentStyle={{ background: TOOLTIP_BG, border: "1px solid #e2e8f0", borderRadius: 8, color: "#1e293b" }}
-                    formatter={(value: number) => [value, "Clics"]}
-                    labelFormatter={(label) => `Botón: ${label}`}
-                  />
-                  <Bar dataKey="clicks" fill="#ec4899" radius={[4, 4, 0, 0]} name="Clics" />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-52 flex items-center justify-center text-slate-500 text-sm">
-                Sin clics por botón
-              </div>
-            )}
-          </div>
+        {/* KPIs: lectura rápida del estado de la campaña elegida */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {!selectedId ? (
+            <>
+              <KpiCard label="Destinatarios" value="—" hint="Elige una campaña" tone="muted" />
+              <KpiCard label="Aperturas únicas" value="—" hint="Quién abrió al menos una vez" tone="muted" />
+              <KpiCard label="Eventos de apertura" value="—" hint="Total de opens registrados" tone="muted" />
+              <KpiCard label="Clics" value="—" hint="Interacción con enlaces" tone="muted" />
+            </>
+          ) : loadingDetail ? (
+            <>
+              <KpiCard label="Destinatarios" value="…" tone="primary" />
+              <KpiCard label="Aperturas únicas" value="…" tone="secondary" />
+              <KpiCard label="Eventos de apertura" value="…" tone="accent" />
+              <KpiCard label="Clics" value="…" tone="muted" />
+            </>
+          ) : (
+            <>
+              <KpiCard
+                label="Destinatarios"
+                value={kpiRecipients != null ? String(kpiRecipients) : "—"}
+                hint="Base del envío"
+                tone="primary"
+              />
+              <KpiCard
+                label="Aperturas únicas"
+                value={kpiUniqueOpens != null ? String(kpiUniqueOpens) : "—"}
+                hint={kpiOpenRateHint}
+                tone="secondary"
+              />
+              <KpiCard
+                label="Eventos de apertura"
+                value={kpiTotalOpenEvents != null ? String(kpiTotalOpenEvents) : "—"}
+                hint="Incluye re-aperturas (pixel)"
+                tone="accent"
+              />
+              <KpiCard
+                label="Clics"
+                value={String(clicksTotal)}
+                hint={kpiClicksHint}
+                tone="muted"
+              />
+            </>
+          )}
         </div>
 
-        {/* Aperturas | Clicks por Recipiente (barras verticales + línea) */}
-        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <p className="text-xs font-medium text-indigo-600 uppercase tracking-wider mb-3">
-            Aperturas | Clicks por Recipiente
-          </p>
+        {/* Gráfico principal: historia por destinatario */}
+        <motion.section
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, delay: 0.05 }}
+          className={cn(cardSurface, "p-6")}
+        >
+          <div className="mb-5 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-900">Rendimiento por destinatario</h2>
+            </div>
+          </div>
           {!selectedId ? (
-            <div className="h-64 flex items-center justify-center text-slate-500 text-sm">
-              Selecciona una campaña para ver aperturas y clics por destinatario
+            <div className="h-[340px] flex items-center justify-center text-slate-500 text-sm rounded-xl border border-dashed border-slate-200 bg-slate-50/90">
+              Selecciona una campaña en la tabla inferior
             </div>
           ) : loadingDetail ? (
-            <div className="h-64 flex items-center justify-center text-slate-500 text-sm">Cargando…</div>
+            <div className="h-[340px] flex items-center justify-center text-slate-500 text-sm">Cargando…</div>
           ) : opensReport && clicksByRecipientReport && opensReport.recipients.length > 0 ? (
-            <ResponsiveContainer width="100%" height={320}>
+            <ResponsiveContainer width="100%" height={380}>
               <ComposedChart
                 data={(() => {
                   const clicksMap = new Map(
@@ -461,57 +402,312 @@ export function CampanasPage() {
                     }))
                     .slice(0, 20);
                 })()}
-                margin={{ top: 8, right: 24, left: 8, bottom: 60 }}
+                margin={{ top: 12, right: 28, left: 4, bottom: 64 }}
               >
-                <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} />
+                <CartesianGrid strokeDasharray="4 8" stroke={CHART_GRID} vertical={false} />
                 <XAxis
                   dataKey="name"
-                  tick={{ fill: "#475569", fontSize: 10 }}
-                  stroke="#64748b"
-                  angle={-35}
+                  tick={tickMuted}
+                  stroke={CHART_AXIS}
+                  angle={-32}
                   textAnchor="end"
-                  height={56}
+                  height={60}
                   interval={0}
                 />
-                <YAxis
-                  tick={{ fill: "#475569", fontSize: 10 }}
-                  stroke="#64748b"
-                  domain={[0, "auto"]}
-                />
+                <YAxis tick={tickMuted} stroke={CHART_AXIS} domain={[0, "auto"]} />
                 <Tooltip
-                  contentStyle={{ background: TOOLTIP_BG, border: "1px solid #e2e8f0", borderRadius: 8, color: "#1e293b" }}
-                  formatter={(value: number, name: string) => [value, name === "opens" ? "Aperturas" : "Clics"]}
-                  labelFormatter={(label) => `Recipient: ${label}`}
+                  contentStyle={TOOLTIP_STYLE}
+                  formatter={(value: number, name: string) => [
+                    value,
+                    name === "opens" ? "Aperturas" : "Clics",
+                  ]}
+                  labelFormatter={(label) => `Destinatario: ${label}`}
                 />
                 <Legend
-                  wrapperStyle={{ fontSize: 11 }}
+                  wrapperStyle={chartLegendStyle}
                   formatter={(value) => (
-                    <span className="text-slate-600">
+                    <span style={{ color: DASH.muted }}>
                       {value === "opens" ? "Aperturas" : value === "clicks" ? "Clics" : value}
                     </span>
                   )}
                 />
                 <Bar
                   dataKey="clicks"
-                  fill="#ec4899"
-                  radius={[4, 4, 0, 0]}
+                  fill={DASH.secondary}
+                  radius={[6, 6, 0, 0]}
                   name="clicks"
                 />
                 <Line
                   type="monotone"
                   dataKey="opens"
-                  stroke="#6366f1"
-                  strokeWidth={2}
-                  dot={{ fill: "#6366f1", r: 3 }}
+                  stroke={DASH.primary}
+                  strokeWidth={2.5}
+                  dot={{ fill: DASH.primary, r: 3, strokeWidth: 0 }}
+                  activeDot={{ r: 5 }}
                   name="opens"
                 />
               </ComposedChart>
             </ResponsiveContainer>
           ) : (
-            <div className="h-64 flex items-center justify-center text-slate-500 text-sm">Sin datos</div>
+            <div className="h-[340px] flex items-center justify-center text-slate-500 text-sm">Sin datos</div>
           )}
+        </motion.section>
+
+        {/* Secundarios: geografía ancha + columna (dispositivos + Brevo + botones) */}
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:gap-5">
+          <motion.section
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.1 }}
+            className={cn(cardSurface, "p-5 lg:col-span-7 min-h-[300px]")}
+          >
+            <h3 className="text-sm font-semibold text-slate-800 mb-1">Aperturas por país</h3>
+            <p className="text-[11px] text-slate-500 mb-4">Top países por eventos de pixel</p>
+            {!selectedId ? (
+              <div className="h-56 flex items-center justify-center text-slate-500 text-sm">
+                Selecciona una campaña
+              </div>
+            ) : loadingDetail ? (
+              <div className="h-56 flex items-center justify-center text-slate-500 text-sm">Cargando…</div>
+            ) : locationsReport && locationsReport.locations.length > 0 ? (
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart
+                  data={locationsReport.locations.slice(0, 8)}
+                  layout="vertical"
+                  margin={{ left: 4, right: 20, top: 4, bottom: 4 }}
+                >
+                  <CartesianGrid strokeDasharray="4 8" stroke={CHART_GRID} horizontal={false} />
+                  <XAxis
+                    type="number"
+                    domain={[0, "auto"]}
+                    tick={tickMuted}
+                    stroke={CHART_AXIS}
+                  />
+                  <YAxis
+                    type="category"
+                    dataKey="country_code"
+                    width={40}
+                    tick={tickMuted}
+                    stroke={CHART_AXIS}
+                  />
+                  <Tooltip
+                    contentStyle={TOOLTIP_STYLE}
+                    content={({ active, payload }) =>
+                      active && payload?.[0] ? (
+                        <div
+                          className="rounded-xl px-3 py-2 text-xs text-slate-800"
+                          style={{
+                            background: TOOLTIP_STYLE.background,
+                            border: TOOLTIP_STYLE.border,
+                            boxShadow: TOOLTIP_STYLE.boxShadow,
+                          }}
+                        >
+                          <span>
+                            {(payload[0].payload as LocationCount).country_name ||
+                              (payload[0].payload as LocationCount).country_code}
+                          </span>
+                          <span className="font-semibold ml-2" style={{ color: DASH.primary }}>
+                            {payload[0].value}
+                          </span>
+                        </div>
+                      ) : null
+                    }
+                  />
+                  <Bar
+                    dataKey="count"
+                    fill="url(#barGradGeo)"
+                    radius={[0, 8, 8, 0]}
+                    name="Aperturas"
+                  />
+                  <defs>
+                    <linearGradient id="barGradGeo" x1="0" y1="0" x2="1" y2="0">
+                      <stop offset="0%" stopColor={DASH.primary} stopOpacity={0.85} />
+                      <stop offset="100%" stopColor="#38bdf8" stopOpacity={0.9} />
+                    </linearGradient>
+                  </defs>
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-56 flex items-center justify-center text-slate-500 text-sm">Sin datos</div>
+            )}
+          </motion.section>
+
+          <div className="flex flex-col gap-4 lg:col-span-5">
+            <motion.section
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.12 }}
+              className={cn(cardSurface, "p-5 flex-1 min-h-[280px]")}
+            >
+              <h3 className="text-sm font-semibold text-slate-800 mb-1">Dispositivos</h3>
+              <p className="text-[11px] text-slate-500 mb-2">Distribución de aperturas / clics</p>
+              {!selectedId ? (
+                <div className="h-52 flex items-center justify-center text-slate-500 text-sm">
+                  Selecciona una campaña
+                </div>
+              ) : loadingDetail ? (
+                <div className="h-52 flex items-center justify-center text-slate-500 text-sm">Cargando…</div>
+              ) : devicesReport && devicesReport.devices.some((d) => d.count > 0) ? (
+                <ResponsiveContainer width="100%" height={240}>
+                  <PieChart>
+                    <Pie
+                      data={devicesReport.devices}
+                      dataKey="count"
+                      nameKey="device"
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={52}
+                      outerRadius={82}
+                      paddingAngle={2}
+                      stroke="#f1f5f9"
+                      strokeWidth={2}
+                    >
+                      {devicesReport.devices.map((_, i) => (
+                        <Cell key={i} fill={SERIES_COLORS[i % SERIES_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={TOOLTIP_STYLE}
+                      formatter={(value: number, name: string) => [value, name]}
+                    />
+                    <Legend
+                      wrapperStyle={chartLegendStyle}
+                      formatter={(value) => (
+                        <span style={{ color: DASH.muted }}>{value}</span>
+                      )}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-52 flex items-center justify-center text-slate-500 text-sm">Sin datos</div>
+              )}
+            </motion.section>
+
+            <motion.section
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.14 }}
+              className={cn(cardSurface, "p-5 min-h-[280px]")}
+            >
+              <h3 className="text-sm font-semibold text-slate-800 mb-1">Interno vs Brevo</h3>
+              <p className="text-[11px] text-slate-500 mb-3">Aperturas y clics (últimos 31 días Brevo)</p>
+              {!selectedId ? (
+                <div className="h-48 flex items-center justify-center text-slate-500 text-sm">
+                  Selecciona una campaña
+                </div>
+              ) : loadingDetail ? (
+                <div className="h-48 flex items-center justify-center text-slate-500 text-sm">Cargando…</div>
+              ) : brevoCompare ? (
+                <div className="space-y-3">
+                  <ResponsiveContainer width="100%" height={200}>
+                    <BarChart
+                      data={[
+                        {
+                          name: "Aperturas",
+                          Interno: brevoCompare.internal_unique_opens,
+                          Brevo: brevoCompare.brevo_unique_opens,
+                        },
+                        {
+                          name: "Clics",
+                          Interno: brevoCompare.internal_total_clicks,
+                          Brevo: brevoCompare.brevo_total_clicks,
+                        },
+                      ]}
+                      margin={{ top: 8, right: 12, left: 0, bottom: 0 }}
+                    >
+                      <CartesianGrid strokeDasharray="4 8" stroke={CHART_GRID} vertical={false} />
+                      <XAxis dataKey="name" tick={tickMuted} stroke={CHART_AXIS} />
+                      <YAxis tick={tickMuted} stroke={CHART_AXIS} domain={[0, "auto"]} />
+                      <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value, name) => [`${value}`, name]} />
+                      <Legend
+                        wrapperStyle={chartLegendStyle}
+                        formatter={(value) => (
+                          <span style={{ color: DASH.muted }}>{value}</span>
+                        )}
+                      />
+                      <Bar dataKey="Interno" fill={DASH.primary} radius={[6, 6, 0, 0]} name="Interno" />
+                      <Bar dataKey="Brevo" fill="#38bdf8" radius={[6, 6, 0, 0]} name="Brevo" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                  <p className="text-[10px] leading-relaxed text-slate-500 border-t border-slate-100 pt-3">
+                    Brevo: entregados {brevoCompare.brevo_delivered}, hard bounce{" "}
+                    {brevoCompare.brevo_hard_bounces}, soft {brevoCompare.brevo_soft_bounces}, spam{" "}
+                    {brevoCompare.brevo_spam_reports}.
+                  </p>
+                </div>
+              ) : (
+                <div className="h-48 flex items-center justify-center text-slate-500 text-sm">
+                  Brevo no disponible o sin datos
+                </div>
+              )}
+            </motion.section>
+
+            <motion.section
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.16 }}
+              className={cn(cardSurface, "p-5 min-h-[260px]")}
+            >
+              <h3 className="text-sm font-semibold text-slate-800 mb-1">Clics por botón</h3>
+              <p className="text-[11px] text-slate-500 mb-3">Benchmarking de CTAs en plantilla</p>
+              {!selectedId ? (
+                <div className="h-44 flex items-center justify-center text-slate-500 text-sm">
+                  Selecciona una campaña
+                </div>
+              ) : loadingDetail ? (
+                <div className="h-44 flex items-center justify-center text-slate-500 text-sm">Cargando…</div>
+              ) : clicksByButtonReport && clicksByButtonReport.buttons.length > 0 ? (
+                <ResponsiveContainer width="100%" height={200}>
+                  <BarChart
+                    data={clicksByButtonReport.buttons.map((b) => ({
+                      name: b.button_id.length > 14 ? `${b.button_id.slice(0, 12)}…` : b.button_id,
+                      clicks: b.clicks,
+                    }))}
+                    margin={{ top: 8, right: 12, left: 0, bottom: 28 }}
+                  >
+                    <CartesianGrid strokeDasharray="4 8" stroke={CHART_GRID} vertical={false} />
+                    <XAxis
+                      dataKey="name"
+                      tick={tickMuted}
+                      stroke={CHART_AXIS}
+                      angle={-30}
+                      textAnchor="end"
+                      height={48}
+                      interval={0}
+                    />
+                    <YAxis
+                      tick={tickMuted}
+                      stroke={CHART_AXIS}
+                      label={{
+                        value: "Clics",
+                        angle: -90,
+                        position: "insideLeft",
+                        fill: DASH.muted,
+                        fontSize: 10,
+                      }}
+                      domain={[0, "auto"]}
+                    />
+                    <Tooltip
+                      contentStyle={TOOLTIP_STYLE}
+                      formatter={(value: number) => [value, "Clics"]}
+                      labelFormatter={(label) => `Botón: ${label}`}
+                    />
+                    <Bar dataKey="clicks" fill={DASH.accent} radius={[6, 6, 0, 0]} name="Clics" />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-44 flex items-center justify-center text-slate-500 text-sm">
+                  Sin clics por botón
+                </div>
+              )}
+            </motion.section>
+          </div>
         </div>
-      </div>
+
+        <div className="space-y-6 border-t border-slate-200/90 pt-10">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+            Campañas — listado y filtros
+          </p>
 
       {/* Row 2: Accordion filtros + botones */}
       <div className="space-y-3">
@@ -520,10 +716,10 @@ export function CampanasPage() {
             type="button"
             onClick={() => setFiltersOpen((v) => !v)}
             className={cn(
-              "flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors",
+              "flex items-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-medium transition-all duration-200",
               filtersOpen
-                ? "border-indigo-400 bg-indigo-50 text-indigo-700"
-                : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50 hover:border-indigo-200"
+                ? "border-indigo-300 bg-indigo-50 text-indigo-800 shadow-sm"
+                : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300"
             )}
           >
             {filtersOpen ? (
@@ -538,7 +734,7 @@ export function CampanasPage() {
               type="button"
               variant="ghost"
               size="default"
-              className="gap-2 text-violet-600 hover:bg-violet-50 hover:text-violet-700 border border-violet-200 bg-white"
+              className="gap-2 rounded-xl border border-indigo-200 bg-white text-indigo-700 hover:bg-indigo-50/90"
             >
               <HiOutlinePlus className="h-4 w-4" />
               Nueva campaña
@@ -548,7 +744,7 @@ export function CampanasPage() {
             type="button"
             variant="ghost"
             size="default"
-            className="gap-2 text-sky-600 hover:bg-sky-50 hover:text-sky-700 border border-sky-200 bg-white"
+            className="gap-2 rounded-xl border border-sky-200 bg-white text-sky-700 hover:bg-sky-50/90"
             onClick={handleExportExcel}
             disabled={exporting}
           >
@@ -558,7 +754,7 @@ export function CampanasPage() {
         </div>
 
         {filtersOpen && (
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className={cn(cardSurface, "p-5")}>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
               <FilterInput
                 label="Envío desde"
@@ -639,14 +835,14 @@ export function CampanasPage() {
                 variant="ghost"
                 size="default"
                 onClick={() => setFilters({})}
-                className="text-slate-600 hover:bg-slate-100 hover:text-slate-800 border border-slate-200 bg-white"
+                className="rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
               >
                 Limpiar filtros
               </Button>
               <Button
                 size="default"
                 onClick={loadCampaigns}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white border-0"
+                className="rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white border-0 shadow-md shadow-slate-300/40"
               >
                 Aplicar filtros
               </Button>
@@ -656,9 +852,9 @@ export function CampanasPage() {
       </div>
 
       {/* Row 3: Tabla */}
-      <div className="rounded-xl border border-slate-200 bg-white overflow-hidden shadow-sm">
+      <div className={cn(cardSurface, "overflow-hidden")}>
         {error && (
-          <div className="p-4 text-rose-600 text-sm">{error}</div>
+          <div className="p-4 text-rose-600 text-sm border-b border-slate-100">{error}</div>
         )}
         {loading ? (
           <div className="p-8 text-center text-slate-500">Cargando campañas…</div>
@@ -666,17 +862,17 @@ export function CampanasPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-200 bg-slate-50 text-left">
-                  <th className="p-3 font-medium text-violet-600">ID</th>
-                  <th className="p-3 font-medium text-violet-600">Nombre</th>
-                  <th className="p-3 font-medium text-violet-600">Sender</th>
-                  <th className="p-3 font-medium text-violet-600">Asunto</th>
-                  <th className="p-3 font-medium text-violet-600">Preheader</th>
-                  <th className="p-3 font-medium text-violet-600">Recipients</th>
-                  <th className="p-3 font-medium text-violet-600">Status</th>
-                  <th className="p-3 font-medium text-violet-600">Sent at</th>
-                  <th className="p-3 font-medium text-violet-600">Aperturas</th>
-                  <th className="p-3 font-medium text-violet-600">Clics</th>
+                <tr className="border-b border-slate-200 bg-slate-50/90 text-left">
+                  <th className="p-3 font-medium text-violet-700">ID</th>
+                  <th className="p-3 font-medium text-violet-700">Nombre</th>
+                  <th className="p-3 font-medium text-violet-700">Sender</th>
+                  <th className="p-3 font-medium text-violet-700">Asunto</th>
+                  <th className="p-3 font-medium text-violet-700">Preheader</th>
+                  <th className="p-3 font-medium text-violet-700">Recipients</th>
+                  <th className="p-3 font-medium text-violet-700">Status</th>
+                  <th className="p-3 font-medium text-violet-700">Sent at</th>
+                  <th className="p-3 font-medium text-violet-700">Aperturas</th>
+                  <th className="p-3 font-medium text-violet-700">Clics</th>
                 </tr>
               </thead>
               <tbody>
@@ -687,14 +883,14 @@ export function CampanasPage() {
                       key={c.id}
                       onClick={() => isClickable && setSelectedId(selectedId === c.id ? null : c.id)}
                       className={cn(
-                        "border-b border-slate-200 transition-colors",
+                        "border-b border-slate-100 transition-colors",
                         isClickable && "hover:bg-slate-50 cursor-pointer",
                         !isClickable && "cursor-default opacity-75",
-                        selectedId === c.id && "bg-indigo-50 border-l-4 border-l-indigo-500"
+                        selectedId === c.id && "bg-indigo-50 border-l-[3px] border-l-indigo-500"
                       )}
                     >
-                      <td className="p-3 text-slate-600 font-mono text-xs">{c.id.slice(0, 8)}…</td>
-                      <td className="p-3 text-slate-800 font-medium">{c.name}</td>
+                      <td className="p-3 text-slate-500 font-mono text-xs">{c.id.slice(0, 8)}…</td>
+                      <td className="p-3 text-slate-900 font-medium">{c.name}</td>
                       <td className="p-3 text-slate-600">{c.sender_name}</td>
                       <td className="p-3 text-slate-600 max-w-[120px] truncate" title={c.subject ?? ""}>
                         {c.subject ?? "—"}
@@ -702,7 +898,7 @@ export function CampanasPage() {
                       <td className="p-3 text-slate-600 max-w-[100px] truncate" title={c.preheader ?? ""}>
                         {c.preheader ?? "—"}
                       </td>
-                      <td className="p-3 text-slate-600">{c.num_recipients}</td>
+                      <td className="p-3 text-slate-600 tabular-nums">{c.num_recipients}</td>
                       <td className="p-3">
                         <span
                           className={cn(
@@ -719,11 +915,11 @@ export function CampanasPage() {
                         </span>
                       </td>
                       <td className="p-3 text-slate-600 whitespace-nowrap">{formatSentAt(c.sent_at)}</td>
-                      <td className="p-3 text-slate-600">
-                        {c.total_opens} ({c.open_rate_pct}%)
+                      <td className="p-3 text-slate-700 tabular-nums">
+                        {c.total_opens} <span className="text-slate-500">({c.open_rate_pct}%)</span>
                       </td>
-                      <td className="p-3 text-slate-600">
-                        {c.total_clicks} ({c.click_rate_pct}%)
+                      <td className="p-3 text-slate-700 tabular-nums">
+                        {c.total_clicks} <span className="text-slate-500">({c.click_rate_pct}%)</span>
                       </td>
                     </tr>
                   );
@@ -746,7 +942,7 @@ export function CampanasPage() {
                 variant="ghost"
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page <= 1}
-                className="gap-1 border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 h-9 px-3"
+                className="gap-1 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 h-9 px-3"
               >
                 <HiOutlineChevronLeft className="h-4 w-4" />
                 Anterior
@@ -761,7 +957,7 @@ export function CampanasPage() {
                 variant="ghost"
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 disabled={page >= totalPages}
-                className="gap-1 border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 h-9 px-3"
+                className="gap-1 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 h-9 px-3"
               >
                 Siguiente
                 <HiOutlineChevronRight className="h-4 w-4" />
@@ -769,37 +965,39 @@ export function CampanasPage() {
             </div>
           </div>
         )}
+      </div>
 
         {/* Tabla de campañas programadas / borrador */}
         {!loading && scheduledDraftCampaigns.length > 0 && (
-          <div className="mt-8 rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-            <div className="border-b border-slate-200 bg-slate-50 px-4 py-2.5">
-              <h2 className="text-sm font-semibold text-slate-700">
+          <div className={cn(cardSurface, "mt-8 overflow-hidden")}>
+            <div className="border-b border-slate-200 bg-slate-50/90 px-4 py-3">
+              <h2 className="text-sm font-semibold text-slate-800">
                 Campañas programadas / borrador
               </h2>
               <p className="text-xs text-slate-500">
-                Campañas con estado <span className="font-medium">scheduled</span> o <span className="font-medium">pending</span>.
+                Campañas con estado <span className="font-medium text-slate-600">scheduled</span> o{" "}
+                <span className="font-medium text-slate-600">pending</span>.
               </p>
             </div>
-            <table className="min-w-full divide-y divide-slate-200 text-sm">
-              <thead className="bg-slate-50">
+            <table className="min-w-full divide-y divide-slate-100 text-sm">
+              <thead className="bg-slate-50/90">
                 <tr>
-                  <th className="p-3 font-medium text-violet-600 text-left">ID</th>
-                  <th className="p-3 font-medium text-violet-600 text-left">Nombre</th>
-                  <th className="p-3 font-medium text-violet-600 text-left">Sender</th>
-                  <th className="p-3 font-medium text-violet-600 text-left">Asunto</th>
-                  <th className="p-3 font-medium text-violet-600 text-left">Preheader</th>
-                  <th className="p-3 font-medium text-violet-600 text-right">Recipients</th>
-                  <th className="p-3 font-medium text-violet-600 text-left">Status</th>
-                  <th className="p-3 font-medium text-violet-600 text-left">Scheduled at</th>
-                  <th className="p-3 font-medium text-violet-600 text-center">Acciones</th>
+                  <th className="p-3 font-medium text-violet-700 text-left">ID</th>
+                  <th className="p-3 font-medium text-violet-700 text-left">Nombre</th>
+                  <th className="p-3 font-medium text-violet-700 text-left">Sender</th>
+                  <th className="p-3 font-medium text-violet-700 text-left">Asunto</th>
+                  <th className="p-3 font-medium text-violet-700 text-left">Preheader</th>
+                  <th className="p-3 font-medium text-violet-700 text-right">Recipients</th>
+                  <th className="p-3 font-medium text-violet-700 text-left">Status</th>
+                  <th className="p-3 font-medium text-violet-700 text-left">Scheduled at</th>
+                  <th className="p-3 font-medium text-violet-700 text-center">Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {scheduledDraftCampaigns.map((c) => (
                   <tr key={c.id} className="border-t border-slate-100 hover:bg-slate-50 transition-colors">
-                    <td className="p-3 text-slate-600 font-mono text-xs">{c.id.slice(0, 8)}…</td>
-                    <td className="p-3 text-slate-800 font-medium">{c.name}</td>
+                    <td className="p-3 text-slate-500 font-mono text-xs">{c.id.slice(0, 8)}…</td>
+                    <td className="p-3 text-slate-900 font-medium">{c.name}</td>
                     <td className="p-3 text-slate-600">{c.sender_name}</td>
                     <td className="p-3 text-slate-600 max-w-[180px] truncate" title={c.subject ?? ""}>
                       {c.subject ?? "—"}
@@ -807,7 +1005,7 @@ export function CampanasPage() {
                     <td className="p-3 text-slate-600 max-w-[160px] truncate" title={c.preheader ?? ""}>
                       {c.preheader ?? "—"}
                     </td>
-                    <td className="p-3 text-slate-600 text-right">{c.num_recipients}</td>
+                    <td className="p-3 text-slate-600 text-right tabular-nums">{c.num_recipients}</td>
                     <td className="p-3">
                       <span
                         className={cn(
@@ -830,7 +1028,7 @@ export function CampanasPage() {
                           variant="ghost"
                           size="default"
                           onClick={() => handleEditDraft(c.id)}
-                          className="h-8 px-2 text-xs gap-1 border border-sky-200 text-sky-700 hover:bg-sky-50"
+                          className="h-8 px-2 text-xs gap-1 rounded-lg border border-sky-200 text-sky-700 hover:bg-sky-50"
                         >
                           <FaEdit className="h-3 w-3" />
                           Editar
@@ -840,7 +1038,7 @@ export function CampanasPage() {
                           variant="ghost"
                           size="default"
                           onClick={() => handleDeleteDraft(c.id)}
-                          className="h-8 px-2 text-xs gap-1 border border-rose-200 text-rose-700 hover:bg-rose-50"
+                          className="h-8 px-2 text-xs gap-1 rounded-lg border border-rose-200 text-rose-700 hover:bg-rose-50"
                         >
                           <FaRegTrashAlt className="h-3 w-3" />
                           Eliminar
@@ -853,6 +1051,7 @@ export function CampanasPage() {
             </table>
           </div>
         )}
+        </div>
       </div>
     </div>
   );
@@ -871,12 +1070,12 @@ function FilterInput({
 }) {
   return (
     <div className="space-y-1">
-      <label className="block text-xs font-medium text-slate-600">{label}</label>
+      <label className="block text-xs font-medium text-slate-500">{label}</label>
       <input
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400"
       />
     </div>
   );

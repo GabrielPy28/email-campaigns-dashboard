@@ -4,7 +4,7 @@ from typing import List
 from fastapi import APIRouter, Depends, File, Form, HTTPException, status, UploadFile
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, or_
 
 from app.db.session import get_db
 from app.db import models
@@ -66,8 +66,18 @@ def list_templates(
     db: Session = Depends(get_db),
     _: dict = Depends(get_current_user),
 ):
-    """Lista todas las plantillas (id, nombre, created_at)."""
-    return db.query(models.Template).order_by(models.Template.created_at.desc()).all()
+    """Lista plantillas reutilizables. No incluye snapshots creados solo para envíos de prueba (POST /campaigns-test/send)."""
+    return (
+        db.query(models.Template)
+        .filter(
+            or_(
+                models.Template.name.is_(None),
+                ~models.Template.name.like("[test]%"),
+            )
+        )
+        .order_by(models.Template.created_at.desc())
+        .all()
+    )
 
 
 def _get_template_by_id(db: Session, template_id: str):

@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import Swal from "sweetalert2";
-import * as XLSX from "xlsx";
 import { DateTime } from "luxon";
+import Select, { type GroupBase, type MultiValue, type SingleValue } from "react-select";
 import {
   fetchTemplates,
   fetchTemplate,
@@ -10,133 +10,64 @@ import {
   createTemplateFromHtml,
   createCampaign,
   fetchCampaignDetail,
+  fetchListas,
+  fetchCreators,
   updateCampaign,
   type CampaignReadDetail,
   type TemplateRead,
   type TemplateDetail,
   type SenderRead,
-  type RecipientInput,
+  type ListaRead,
+  type CreatorRead,
 } from "../../lib/api";
+import { CampaignPreviewModal } from "../../components/campaigns/CampaignPreviewModal";
+import { SnippetVariableSelect } from "../../components/templates/SnippetVariableSelect";
 import { Button } from "../../components/ui/button";
-import { cn } from "../../lib/utils";
+import { SelectList, type ListOption } from "../../components/ui/select-list";
+import {
+  senderMultiSelectStyles,
+  type SenderSelectOption,
+  listaTestSingleSelectStyles,
+  type ListaTestSelectOption,
+  creatorTestMultiSelectStyles,
+  type CreatorTestSelectOption,
+} from "../../components/templates/templateTestSendSelectStyles";
 import { useTranslation } from "react-i18next";
-import { UTC_OFFSETS, getCountriesByOffset } from "../../lib/timezoneUtils";
+import { UTC_OFFSETS, getCountriesByOffset, flagEmojiFromCountryCode } from "../../lib/timezoneUtils";
 import { isValidSchedule, toLuxonZone } from "../../lib/scheduleValidation";
-import { HiOutlineArrowLeft, HiOutlineArrowDownTray } from "react-icons/hi2";
+import { HiOutlineArrowLeft } from "react-icons/hi2";
 
-const RECIPIENT_COLUMNS = [
-  "email",
-  "first_name",
-  "last_name",
-  "username",
-  "handle_instagram",
-  "handle_tiktok",
-  "youtube_channel",
-  "youtube_url",
-  "vertical",
-  "instagram_followers",
-  "tiktok_followers",
-  "youtube_subscribers",
-] as const;
-const REQUIRED_COLUMNS = ["email", "first_name"] as const;
-
-function normalizeHeader(h: string): string {
-  return String(h || "").trim().toLowerCase().replace(/\s+/g, "_");
+function toCreatorOption(c: CreatorRead): CreatorTestSelectOption {
+  const displayName =
+    c.full_name?.trim() ||
+    [c.first_name, c.last_name].filter(Boolean).join(" ").trim() ||
+    "Sin nombre";
+  return {
+    value: c.id,
+    label: `${c.email} — ${displayName}`,
+    email: c.email,
+    displayName,
+  };
 }
 
-function parseRecipientsFile(file: File): Promise<RecipientInput[]> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const data = e.target?.result;
-        if (!data) {
-          reject(new Error("No se pudo leer el archivo"));
-          return;
-        }
-        const wb = XLSX.read(data, { type: "binary", raw: false });
-        const firstSheet = wb.SheetNames[0];
-        if (!firstSheet) {
-          reject(new Error("El archivo no tiene hojas"));
-          return;
-        }
-        const ws = wb.Sheets[firstSheet];
-        const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, {
-          defval: "",
-          raw: false,
-        });
-        if (rows.length === 0) {
-          reject(new Error("El archivo no tiene filas de datos"));
-          return;
-        }
-        const headers = Object.keys(rows[0]).map(normalizeHeader);
-        const missing = REQUIRED_COLUMNS.filter(
-          (c) => !headers.includes(c.toLowerCase())
-        );
-        if (missing.length > 0) {
-          reject(
-            new Error(
-              `Faltan columnas obligatorias: ${missing.join(", ")}. Requeridas: email, first_name`
-            )
-          );
-          return;
-        }
-        const get = (row: Record<string, unknown>, key: string) => {
-          const k = Object.keys(row).find(
-            (h) => normalizeHeader(h) === key.toLowerCase()
-          );
-          const v = k ? row[k] : undefined;
-          return v != null ? String(v).trim() : "";
-        };
-        const recipients: RecipientInput[] = rows.map((row, i) => {
-          const email = get(row, "email");
-          const first_name = get(row, "first_name");
-          const last_name = get(row, "last_name");
-          const username = get(row, "username");
-          const nombre =
-            first_name + (last_name ? ` ${last_name}` : "");
-          const id = email || `row-${i + 1}`;
-          const extra: Record<string, unknown> = {};
-          RECIPIENT_COLUMNS.forEach((col) => {
-            if (!["email", "first_name", "last_name", "username"].includes(col)) {
-              const val = get(row, col);
-              if (val) extra[col] = val;
-            }
-          });
-          return {
-            id,
-            email,
-            nombre,
-            username: username || email || first_name,
-            ...extra,
-          };
-        });
-        resolve(recipients);
-      } catch (err) {
-        reject(err instanceof Error ? err : new Error("Error al procesar archivo"));
-      }
-    };
-    reader.onerror = () => reject(new Error("Error al leer el archivo"));
-    reader.readAsBinaryString(file);
-  });
+function ListaOptionLabel({ data }: { data: ListaTestSelectOption }) {
+  return (
+    <div className="flex items-center justify-between gap-3 py-0.5">
+      <span className="min-w-0 truncate font-medium text-slate-900">{data.nombre}</span>
+      <span className="shrink-0 rounded-full bg-violet-100 px-2.5 py-0.5 text-xs font-semibold tabular-nums text-violet-800">
+        {data.num_creators} creadores
+      </span>
+    </div>
+  );
 }
 
-function downloadLayoutExcel() {
-  const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.aoa_to_sheet([[...RECIPIENT_COLUMNS]]);
-  XLSX.utils.book_append_sheet(wb, ws, "Destinatarios");
-  XLSX.writeFile(wb, "destinatarios_layout.xlsx");
-}
-
-function downloadLayoutCsv() {
-  const header = RECIPIENT_COLUMNS.join(",");
-  const blob = new Blob([header + "\n"], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "destinatarios_layout.csv";
-  a.click();
-  URL.revokeObjectURL(url);
+function CreatorOptionLabel({ data }: { data: CreatorTestSelectOption }) {
+  return (
+    <div className="flex flex-col gap-0.5 py-0.5 text-left">
+      <span className="font-semibold text-slate-900">{data.email}</span>
+      <span className="text-xs font-normal text-slate-500">{data.displayName}</span>
+    </div>
+  );
 }
 
 export function NuevaCampanaPage() {
@@ -157,9 +88,18 @@ export function NuevaCampanaPage() {
   const [templateMode, setTemplateMode] = useState<"list" | "custom">("list");
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [customHtml, setCustomHtml] = useState("");
-  const [recipientsFile, setRecipientsFile] = useState<File | null>(null);
-  const [recipients, setRecipients] = useState<RecipientInput[]>([]);
-  const [recipientsError, setRecipientsError] = useState<string | null>(null);
+  const [recipientMode, setRecipientMode] = useState<"lista" | "creadores">("lista");
+  const [listas, setListas] = useState<ListaRead[]>([]);
+  const [creatorsSearchResults, setCreatorsSearchResults] = useState<CreatorRead[]>([]);
+  const [creatorDirectory, setCreatorDirectory] = useState<Record<string, CreatorRead>>({});
+  const [creatorSearch, setCreatorSearch] = useState("");
+  const [loadingCreators, setLoadingCreators] = useState(false);
+  const [selectedListaId, setSelectedListaId] = useState("");
+  const [campaignCreatorIds, setCampaignCreatorIds] = useState<string[]>([]);
+  const [editRecipientHint, setEditRecipientHint] = useState<{
+    count: number;
+    fromList: boolean;
+  } | null>(null);
   const [timezone, setTimezone] = useState("UTC-4");
   const [senderIds, setSenderIds] = useState<string[]>([]);
   const [waitMin, setWaitMin] = useState(60);
@@ -169,16 +109,120 @@ export function NuevaCampanaPage() {
   const [scheduleError, setScheduleError] = useState<string | null>(null);
 
   const [previewHtml, setPreviewHtml] = useState<string>("");
-  const [previewSubject, setPreviewSubject] = useState("");
-  const [previewPreheader, setPreviewPreheader] = useState("");
+  const [previewModalOpen, setPreviewModalOpen] = useState(false);
+
+  const templateOptions = useMemo<ListOption[]>(
+    () => templates.map((t) => ({ value: t.id, label: t.name || t.id.slice(0, 8) })),
+    [templates]
+  );
+  const templateSelectValue = useMemo(
+    () => templateOptions.find((o) => o.value === selectedTemplateId) ?? null,
+    [templateOptions, selectedTemplateId]
+  );
+
+  const timezoneOptions = useMemo<ListOption[]>(
+    () => UTC_OFFSETS.map((tz) => ({ value: tz, label: tz })),
+    []
+  );
+  const timezoneSelectValue = useMemo(
+    () => timezoneOptions.find((o) => o.value === timezone) ?? null,
+    [timezoneOptions, timezone]
+  );
+
+  const senderOptions = useMemo<SenderSelectOption[]>(
+    () =>
+      senders.map((s) => ({
+        value: s.id,
+        label: `${s.full_name} <${s.email}>`,
+      })),
+    [senders]
+  );
+  const senderSelectValue = useMemo(
+    () => senderOptions.filter((o) => senderIds.includes(o.value)),
+    [senderOptions, senderIds]
+  );
+
+  const listaOptions = useMemo<ListaTestSelectOption[]>(
+    () =>
+      listas.map((l) => ({
+        value: l.id,
+        label: l.nombre,
+        nombre: l.nombre,
+        num_creators: l.num_creators,
+      })),
+    [listas]
+  );
+  const listaSelectValue = useMemo(
+    () => listaOptions.find((o) => o.value === selectedListaId) ?? null,
+    [listaOptions, selectedListaId]
+  );
+
+  const creatorOptions = useMemo(() => {
+    const byId = new Map<string, CreatorTestSelectOption>();
+    for (const c of creatorsSearchResults) {
+      byId.set(c.id, toCreatorOption(c));
+    }
+    for (const id of campaignCreatorIds) {
+      if (!byId.has(id)) {
+        const c = creatorDirectory[id];
+        if (c) byId.set(id, toCreatorOption(c));
+        else {
+          byId.set(id, {
+            value: id,
+            label: id,
+            email: id,
+            displayName: "…",
+          });
+        }
+      }
+    }
+    return [...byId.values()];
+  }, [creatorsSearchResults, campaignCreatorIds, creatorDirectory]);
+
+  const creatorSelectValue = useMemo(
+    () => creatorOptions.filter((o) => campaignCreatorIds.includes(o.value)),
+    [creatorOptions, campaignCreatorIds]
+  );
+
+  const loadCreators = useCallback(async (search: string) => {
+    setLoadingCreators(true);
+    try {
+      const rows = await fetchCreators({
+        search: search.trim() || undefined,
+        limit: 500,
+      });
+      setCreatorsSearchResults(rows);
+    } catch {
+      setCreatorsSearchResults([]);
+    } finally {
+      setLoadingCreators(false);
+    }
+  }, []);
 
   useEffect(() => {
-    Promise.all([fetchTemplates(), fetchSenders()])
-      .then(async ([t, s]) => {
+    setCreatorDirectory((prev) => {
+      const next = { ...prev };
+      for (const c of creatorsSearchResults) next[c.id] = c;
+      return next;
+    });
+  }, [creatorsSearchResults]);
+
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      void loadCreators(creatorSearch);
+    }, 350);
+    return () => window.clearTimeout(t);
+  }, [creatorSearch, loadCreators]);
+
+  useEffect(() => {
+    Promise.all([fetchTemplates(), fetchSenders(), fetchListas({ status: "activo" })])
+      .then(async ([t, s, ls]) => {
         setTemplates(t);
         setSenders(s);
+        setListas(ls);
         if (t.length > 0 && !selectedTemplateId) setSelectedTemplateId(t[0].id);
         if (s.length > 0 && senderIds.length === 0) setSenderIds([s[0].id]);
+        if (ls.length > 0 && !selectedListaId) setSelectedListaId(ls[0].id);
 
         if (editId) {
           try {
@@ -198,6 +242,9 @@ export function NuevaCampanaPage() {
             if (details.sender_ids && details.sender_ids.length > 0) {
               setSenderIds(details.sender_ids);
             }
+            const n = details.recipients?.length ?? 0;
+            const fromList = Boolean(details.list_id);
+            setEditRecipientHint({ count: n, fromList });
           } catch (e) {
             setError(e instanceof Error ? e.message : "Error al cargar campaña para edición");
           }
@@ -217,26 +264,11 @@ export function NuevaCampanaPage() {
     } else {
       setPreviewHtml("");
     }
-    setPreviewSubject(subject);
-    setPreviewPreheader(preheader);
-  }, [templateMode, customHtml, selectedTemplateId, subject, preheader]);
+  }, [templateMode, customHtml, selectedTemplateId]);
 
   useEffect(() => {
     loadPreviewTemplate();
   }, [loadPreviewTemplate]);
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setRecipientsFile(file);
-    setRecipientsError(null);
-    parseRecipientsFile(file)
-      .then(setRecipients)
-      .catch((err) => {
-        setRecipientsError(err instanceof Error ? err.message : "Error");
-        setRecipients([]);
-      });
-  };
 
   const handleScheduleBlur = () => {
     if (!scheduleDate || !scheduleTime) return;
@@ -250,9 +282,15 @@ export function NuevaCampanaPage() {
       setSubmitError("El nombre de la campaña es obligatorio.");
       return;
     }
-    if (!isEditing && recipients.length === 0) {
-      setSubmitError("Sube un archivo de destinatarios (Excel/CSV) con columnas email y first_name.");
-      return;
+    if (!isEditing) {
+      if (recipientMode === "lista" && !selectedListaId) {
+        setSubmitError("Selecciona una lista de destinatarios.");
+        return;
+      }
+      if (recipientMode === "creadores" && campaignCreatorIds.length === 0) {
+        setSubmitError("Selecciona al menos un creador registrado.");
+        return;
+      }
     }
     if (senderIds.length === 0) {
       setSubmitError("Selecciona al menos un remitente.");
@@ -326,7 +364,7 @@ export function NuevaCampanaPage() {
           confirmButtonColor: "#16a34a",
         });
       } else {
-        await createCampaign({
+        const payload = {
           name: name.trim(),
           subject: subject.trim() || null,
           preheader: preheader.trim() || null,
@@ -336,8 +374,11 @@ export function NuevaCampanaPage() {
           wait_min_seconds: waitMin,
           wait_max_seconds: waitMax,
           sender_ids: senderIds,
-          recipients,
-        });
+          ...(recipientMode === "lista"
+            ? { list_id: selectedListaId }
+            : { creator_ids: campaignCreatorIds }),
+        };
+        await createCampaign(payload);
         await Swal.fire({
           icon: "success",
           title: "Campaña creada",
@@ -377,6 +418,11 @@ export function NuevaCampanaPage() {
       return code;
     }
   };
+  const sortedCountriesForTz = useMemo(() => {
+    return [...countriesForOffset].sort((a, b) =>
+      getCountryNameEs(a.code).localeCompare(getCountryNameEs(b.code), "es")
+    );
+  }, [countriesForOffset, timezone, t]);
 
   if (loadingMeta) {
     return (
@@ -393,11 +439,58 @@ export function NuevaCampanaPage() {
           Campañas
         </Link>
         <span className="mx-2 text-slate-400">/</span>
-        <span className="text-slate-800 font-medium">Nueva Campaña</span>
+        <span className="text-slate-800 font-medium">
+          {isEditing ? "Editar campaña" : "Nueva campaña"}
+        </span>
       </nav>
-      <h1 className="text-2xl font-bold text-slate-800 mb-6">
-        <span className="text-indigo-600">Nueva</span> Campaña
-      </h1>
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+        <h1 className="text-2xl font-bold text-slate-800 min-w-0">
+          {isEditing ? (
+            <>
+              <span className="text-indigo-600">Editar</span> campaña
+            </>
+          ) : (
+            <>
+              <span className="text-indigo-600">Nueva</span> campaña
+            </>
+          )}
+        </h1>
+        <div className="flex flex-wrap items-center gap-2 justify-end sm:shrink-0 sm:justify-end">
+          <Button
+              type="button"
+              variant="ghost"
+              className="gap-2 border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-400"
+              onClick={() => navigate("/dashboard/campanas")}
+            >
+              <HiOutlineArrowLeft className="h-4 w-4" />
+              Volver
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="default"
+            className="gap-2 border border-emerald-300 bg-emerald-50 text-emerald-900 hover:bg-emerald-600 hover:text-white hover:border-emerald-600 h-9 text-sm whitespace-nowrap"
+            onClick={() => setPreviewModalOpen(true)}
+          >
+            Vista previa y envío de prueba
+          </Button>
+          <Button
+            type="button"
+            size="default"
+            onClick={handleSubmit}
+            disabled={submitting}
+            className="h-9 text-sm bg-indigo-600 hover:bg-indigo-700 text-white shadow-md hover:shadow-lg transition-shadow whitespace-nowrap"
+          >
+            {submitting
+              ? isEditing
+                ? "Guardando…"
+                : "Creando…"
+              : isEditing
+                ? "Guardar cambios"
+                : "Crear campaña"}
+          </Button>
+        </div>
+      </div>
 
       {error && (
         <div className="mb-4 p-4 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-sm">
@@ -410,10 +503,20 @@ export function NuevaCampanaPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-6">
+      <div className="space-y-6">
           <div className="rounded-xl border border-indigo-200/60 bg-white p-4 shadow-sm border-l-4 border-l-indigo-500">
-            <h2 className="text-sm font-semibold text-indigo-700 mb-3">Datos de la campaña</h2>
+            <h2 className="text-sm font-semibold text-indigo-700 mb-1">Datos de la campaña</h2>
+            <p className="text-xs text-slate-500 mb-3 leading-relaxed">
+              <span className="font-medium text-slate-600">Asunto</span> y{" "}
+              <span className="font-medium text-slate-600">preheader</span> admiten variables Jinja2 con el mismo
+              contexto que el HTML:{" "}
+              <code className="rounded bg-slate-100 px-1 text-[11px] text-slate-800">{"{{ nombre }}"}</code>,{" "}
+              <code className="rounded bg-slate-100 px-1 text-[11px] text-slate-800">
+                {"{{ extra.creator.first_name }}"}
+              </code>
+              , o estilo corto <code className="rounded bg-slate-100 px-1 text-[11px]">{"{first_name}"}</code>. Usa el
+              buscador debajo para insertar.
+            </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="sm:col-span-2">
                 <label className="block text-xs font-medium text-slate-600 mb-1">Nombre *</label>
@@ -431,8 +534,12 @@ export function NuevaCampanaPage() {
                   type="text"
                   value={subject}
                   onChange={(e) => setSubject(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:ring-1 focus:ring-indigo-500"
-                  placeholder="Asunto del correo"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                  placeholder='Ej. Hola {{ extra.creator.first_name }}'
+                />
+                <SnippetVariableSelect
+                  onInsert={(snippet) => setSubject((s) => s + snippet)}
+                  instanceId="campana-subject-snippet"
                 />
               </div>
               <div>
@@ -441,8 +548,12 @@ export function NuevaCampanaPage() {
                   type="text"
                   value={preheader}
                   onChange={(e) => setPreheader(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:ring-1 focus:ring-indigo-500"
-                  placeholder="Vista previa en bandeja"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                  placeholder="Vista previa en bandeja (también admite {{ … }} )"
+                />
+                <SnippetVariableSelect
+                  onInsert={(snippet) => setPreheader((s) => s + snippet)}
+                  instanceId="campana-preheader-snippet"
                 />
               </div>
             </div>
@@ -473,18 +584,17 @@ export function NuevaCampanaPage() {
               </label>
             </div>
             {templateMode === "list" ? (
-              <select
-                value={selectedTemplateId}
-                onChange={(e) => setSelectedTemplateId(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:ring-1 focus:ring-indigo-500"
-              >
-                <option value="">Selecciona una plantilla</option>
-                {templates.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name || t.id.slice(0, 8)}
-                  </option>
-                ))}
-              </select>
+              <SelectList
+                classNamePrefix="react-select-campana-template"
+                options={templateOptions}
+                value={templateSelectValue}
+                onChange={(v: SingleValue<ListOption>) =>
+                  setSelectedTemplateId(v?.value ?? "")
+                }
+                placeholder="Selecciona una plantilla"
+                isClearable
+                noOptionsMessage={() => "No hay plantillas"}
+              />
             ) : (
               <textarea
                 value={customHtml}
@@ -497,83 +607,161 @@ export function NuevaCampanaPage() {
           </div>
 
           <div className="rounded-xl border border-sky-200/60 bg-white p-4 shadow-sm border-l-4 border-l-sky-500">
-            <h2 className="text-sm font-semibold text-sky-700 mb-3">Destinatarios</h2>
-            <p className="text-xs text-slate-500 mb-2">
-              Columnas obligatorias: <strong>email</strong>, <strong>first_name</strong>. Opcionales:{" "}
-              {RECIPIENT_COLUMNS.filter((c) => c !== "email" && c !== "first_name").join(", ")}.
-            </p>
-            <div className="flex flex-wrap gap-2 mb-3">
-              <Button
-                type="button"
-                variant="ghost"
-                size="default"
-                className="gap-2 border border-emerald-300 bg-emerald-50 text-emerald-800 h-9 text-sm hover:bg-emerald-600 hover:text-white hover:border-emerald-600"
-                onClick={downloadLayoutExcel}
-              >
-                <HiOutlineArrowDownTray className="h-4 w-4" />
-                Descargar layout Excel
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="default"
-                className="gap-2 border border-sky-300 bg-sky-50 text-sky-800 h-9 text-sm hover:bg-sky-600 hover:text-white hover:border-sky-600"
-                onClick={downloadLayoutCsv}
-              >
-                <HiOutlineArrowDownTray className="h-4 w-4" />
-                Descargar layout CSV
-              </Button>
-            </div>
-            <input
-              type="file"
-              accept=".xlsx,.xls,.csv"
-              onChange={handleFileChange}
-              className="block w-full text-sm text-slate-600 file:mr-4 file:rounded-lg file:border-0 file:bg-indigo-50 file:px-4 file:py-2 file:text-indigo-700"
-            />
-            {recipientsError && (
-              <p className="mt-2 text-sm text-rose-600">{recipientsError}</p>
-            )}
-            {recipients.length > 0 && (
-              <p className="mt-2 text-sm text-emerald-600">
-                {recipients.length} destinatario(s) cargados.
-              </p>
+            <h2 className="text-sm font-semibold text-sky-700 mb-2">Destinatarios</h2>
+            {isEditing && editRecipientHint ? (
+              <div className="rounded-lg border border-sky-200 bg-sky-50/80 px-3 py-2.5 text-sm text-slate-700">
+                <p className="font-medium text-sky-900">Destinatarios fijados al crear la campaña</p>
+                <p className="mt-1 text-xs text-slate-600">
+                  {editRecipientHint.count} destinatario{editRecipientHint.count !== 1 ? "s" : ""}
+                  {editRecipientHint.fromList
+                    ? " (origen: lista guardada en la campaña)."
+                    : " (origen: creadores o carga manual registrada en el servidor)."}
+                </p>
+                <p className="mt-1.5 text-xs text-slate-500">
+                  No se pueden cambiar desde esta pantalla; solo metadatos, plantilla y programación.
+                </p>
+              </div>
+            ) : (
+              <>
+                <p className="text-xs text-slate-500 mb-3">
+                  Elige una lista existente o selecciona creadores del directorio. Los datos de plantilla
+                  (variables <code className="text-[11px]">extra</code>) salen de cada creador.
+                </p>
+                <div className="flex flex-wrap gap-4 mb-4">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="recipientMode"
+                      checked={recipientMode === "lista"}
+                      onChange={() => setRecipientMode("lista")}
+                      className="text-sky-600"
+                    />
+                    <span className="text-sm text-slate-700">Por lista</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="recipientMode"
+                      checked={recipientMode === "creadores"}
+                      onChange={() => setRecipientMode("creadores")}
+                      className="text-sky-600"
+                    />
+                    <span className="text-sm text-slate-700">Por creadores registrados</span>
+                  </label>
+                </div>
+                {recipientMode === "lista" ? (
+                  <div>
+                    <label
+                      className="block text-xs font-medium text-slate-600 mb-1.5"
+                      htmlFor="campana-lista-select"
+                    >
+                      Lista *
+                    </label>
+                    <Select<ListaTestSelectOption, false, GroupBase<ListaTestSelectOption>>
+                      inputId="campana-lista-select"
+                      instanceId="campana-lista"
+                      options={listaOptions}
+                      value={listaSelectValue}
+                      onChange={(v: SingleValue<ListaTestSelectOption>) =>
+                        setSelectedListaId(v?.value ?? "")
+                      }
+                      placeholder={listas.length === 0 ? "No hay listas activas" : "Selecciona una lista…"}
+                      isDisabled={listas.length === 0}
+                      isClearable={false}
+                      formatOptionLabel={(opt) => <ListaOptionLabel data={opt} />}
+                      menuPortalTarget={typeof document !== "undefined" ? document.body : null}
+                      menuPosition="fixed"
+                      styles={listaTestSingleSelectStyles}
+                      noOptionsMessage={() => "No hay listas"}
+                    />
+                    {listaSelectValue ? (
+                      <p className="mt-2 text-xs text-slate-600">
+                        Se enviará a los{" "}
+                        <span className="font-semibold text-sky-800">
+                          {listaSelectValue.num_creators} creador
+                          {listaSelectValue.num_creators !== 1 ? "es" : ""}
+                        </span>{" "}
+                        de esta lista.
+                      </p>
+                    ) : null}
+                  </div>
+                ) : (
+                  <div>
+                    <label
+                      className="block text-xs font-medium text-slate-600 mb-1.5"
+                      htmlFor="campana-creators-select"
+                    >
+                      Creadores *
+                    </label>
+                    <Select<CreatorTestSelectOption, true, GroupBase<CreatorTestSelectOption>>
+                      inputId="campana-creators-select"
+                      instanceId="campana-creators"
+                      isMulti
+                      options={creatorOptions}
+                      value={creatorSelectValue}
+                      onChange={(v) =>
+                        setCampaignCreatorIds(
+                          ((v ?? []) as MultiValue<CreatorTestSelectOption>).map((o) => o.value)
+                        )
+                      }
+                      placeholder="Escribe para buscar por email, nombre o ID…"
+                      isLoading={loadingCreators}
+                      closeMenuOnSelect={false}
+                      hideSelectedOptions={false}
+                      filterOption={() => true}
+                      onInputChange={(input, meta) => {
+                        if (meta.action === "input-change") setCreatorSearch(input);
+                      }}
+                      formatOptionLabel={(opt) => <CreatorOptionLabel data={opt} />}
+                      menuPortalTarget={typeof document !== "undefined" ? document.body : null}
+                      menuPosition="fixed"
+                      styles={creatorTestMultiSelectStyles}
+                      noOptionsMessage={() => "Sin resultados"}
+                    />
+                    {campaignCreatorIds.length > 0 ? (
+                      <p className="mt-2 text-xs font-medium text-emerald-800">
+                        {campaignCreatorIds.length} creador
+                        {campaignCreatorIds.length !== 1 ? "es" : ""} seleccionado
+                        {campaignCreatorIds.length !== 1 ? "s" : ""}
+                      </p>
+                    ) : null}
+                  </div>
+                )}
+              </>
             )}
           </div>
 
           <div className="rounded-xl border border-red-200/60 bg-white p-4 shadow-sm border-l-4 border-l-red-500">
             <h2 className="text-sm font-semibold text-red-700 mb-3">Remitente(s)</h2>
-            <p className="text-xs text-slate-500 mb-3">Elige uno o más remitentes. Puedes marcar varios.</p>
-            <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-2 max-h-48 overflow-y-auto space-y-1">
-              {senders.map((s) => {
-                const selected = senderIds.includes(s.id);
-                return (
-                  <label
-                    key={s.id}
-                    className={cn(
-                      "flex items-center gap-3 rounded-lg px-3 py-2 cursor-pointer transition-colors",
-                      selected ? "bg-indigo-100 border border-indigo-300" : "hover:bg-slate-100 border border-transparent"
-                    )}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selected}
-                      onChange={(e) =>
-                        setSenderIds((prev) =>
-                          e.target.checked ? [...prev, s.id] : prev.filter((id) => id !== s.id)
-                        )
-                      }
-                      className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                    />
-                    <span className="text-sm text-slate-800">
-                      {s.full_name} <span className="text-slate-500">&lt;{s.email}&gt;</span>
-                    </span>
-                  </label>
-                );
-              })}
-            </div>
+            <p className="text-xs text-slate-500 mb-2">
+              Elige uno o más remitentes (round-robin). Usa el buscador del desplegable si hay muchos.
+            </p>
+            <label className="block text-xs font-medium text-slate-600 mb-1.5" htmlFor="campana-senders-select">
+              Remitentes *
+            </label>
+            <Select<SenderSelectOption, true, GroupBase<SenderSelectOption>>
+              inputId="campana-senders-select"
+              instanceId="campana-senders"
+              isMulti
+              options={senderOptions}
+              value={senderSelectValue}
+              onChange={(v) =>
+                setSenderIds(((v ?? []) as MultiValue<SenderSelectOption>).map((o) => o.value))
+              }
+              placeholder={loadingMeta ? "Cargando remitentes…" : "Selecciona uno o más remitentes…"}
+              isDisabled={loadingMeta}
+              isLoading={loadingMeta}
+              closeMenuOnSelect={false}
+              hideSelectedOptions={false}
+              menuPortalTarget={typeof document !== "undefined" ? document.body : null}
+              menuPosition="fixed"
+              styles={senderMultiSelectStyles}
+              noOptionsMessage={() => "No hay remitentes"}
+            />
             {senderIds.length > 0 && (
               <p className="mt-2 text-xs font-medium text-indigo-600">
-                {senderIds.length} remitente{senderIds.length !== 1 ? "s" : ""} seleccionado{senderIds.length !== 1 ? "s" : ""}
+                {senderIds.length} remitente{senderIds.length !== 1 ? "s" : ""} seleccionado
+                {senderIds.length !== 1 ? "s" : ""}
               </p>
             )}
           </div>
@@ -583,30 +771,57 @@ export function NuevaCampanaPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="sm:col-span-2">
                 <label className="block text-xs font-medium text-slate-600 mb-1">Zona horaria</label>
-                <select
-                  value={timezone}
-                  onChange={(e) => setTimezone(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:ring-2 focus:ring-amber-400 focus:border-amber-400"
-                >
-                  {UTC_OFFSETS.map((tz) => (
-                    <option key={tz} value={tz}>
-                      {tz}
-                    </option>
-                  ))}
-                </select>
-                {countriesForOffset.length > 0 && (
-                  <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50/80 p-2 max-h-48 overflow-y-auto">
-                    <p className="text-xs font-medium text-slate-500 mb-1.5">Países y regiones en este horario:</p>
-                    <ul className="text-xs text-slate-600 leading-relaxed space-y-1.5">
-                      {countriesForOffset.map((c) => (
-                        <li key={c.code}>
-                          <span className="font-medium text-slate-700">{getCountryNameEs(c.code)}</span>
-                          {c.regions.length > 0 ? (
-                            <span className="text-slate-600"> — {c.regions.join(", ")}</span>
-                          ) : null}
-                        </li>
+                <SelectList
+                  classNamePrefix="react-select-campana-timezone"
+                  options={timezoneOptions}
+                  value={timezoneSelectValue}
+                  onChange={(v: SingleValue<ListOption>) =>
+                    setTimezone(v?.value ?? timezone)
+                  }
+                  placeholder="Zona horaria"
+                  isClearable={false}
+                  noOptionsMessage={() => "Sin opciones"}
+                />
+                {sortedCountriesForTz.length > 0 && (
+                  <div className="mt-3">
+                    <p className="text-xs font-medium text-slate-600 mb-2">
+                      Países y ciudades / regiones típicas en este offset
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-64 overflow-y-auto pr-1">
+                      {sortedCountriesForTz.map((c) => (
+                        <div
+                          key={c.code}
+                          className="flex gap-3 rounded-xl border border-amber-100 bg-gradient-to-br from-white to-amber-50/50 p-3 shadow-sm"
+                        >
+                          <span
+                            className="text-2xl leading-none shrink-0 select-none"
+                            title={c.code}
+                            aria-hidden
+                          >
+                            {flagEmojiFromCountryCode(c.code)}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-semibold text-slate-800 leading-tight">
+                              {getCountryNameEs(c.code)}
+                            </p>
+                            {c.regions.length > 0 ? (
+                              <div className="mt-1.5 flex flex-wrap gap-1">
+                                {c.regions.map((r) => (
+                                  <span
+                                    key={r}
+                                    className="inline-flex max-w-full rounded-md bg-white/90 px-2 py-0.5 text-[11px] text-slate-600 ring-1 ring-slate-200/80"
+                                  >
+                                    {r}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="mt-1 text-[11px] text-slate-500">Todo el territorio</p>
+                            )}
+                          </div>
+                        </div>
                       ))}
-                    </ul>
+                    </div>
                   </div>
                 )}
               </div>
@@ -655,65 +870,17 @@ export function NuevaCampanaPage() {
               </div>
             </div>
           </div>
-
-          <div className="flex flex-wrap gap-3">
-            <Button
-              type="button"
-              variant="ghost"
-              className="gap-2 border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-400"
-              onClick={() => navigate("/dashboard/campanas")}
-            >
-              <HiOutlineArrowLeft className="h-4 w-4" />
-              Volver
-            </Button>
-            <Button
-              type="button"
-              onClick={handleSubmit}
-              disabled={submitting}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-md hover:shadow-lg transition-shadow"
-            >
-              {submitting ? "Creando…" : "Crear campaña"}
-            </Button>
-          </div>
-        </div>
-
-        <div className="lg:col-span-1">
-          <div className="rounded-xl border border-emerald-200/60 bg-white p-4 shadow-sm sticky top-4 border-l-4 border-l-emerald-500">
-            <h2 className="text-sm font-semibold text-emerald-700 mb-3">Vista previa (inbox)</h2>
-            <div className="rounded-lg border border-slate-200 bg-emerald-50/50 p-3 text-sm">
-              {(() => {
-                const selectedSenders = senders.filter((s) => senderIds.includes(s.id));
-                return selectedSenders.length > 0 ? (
-                  <div className="mb-2 text-slate-600 text-xs">
-                    De: {selectedSenders.map((s) => `${s.full_name} <${s.email}>`).join(", ")}
-                  </div>
-                ) : null;
-              })()}
-              <div className="mb-2 truncate text-slate-500 text-xs">
-                {previewSubject || "Asunto del correo"}
-              </div>
-              <div className="mb-2 truncate text-slate-400 text-xs">
-                {previewPreheader || "Preheader / vista previa"}
-              </div>
-              <div
-                className="rounded border border-slate-200 bg-white overflow-auto max-h-[400px] p-3 text-left"
-                style={{ minHeight: "120px" }}
-              >
-                {previewHtml ? (
-                  <iframe
-                    title="Vista previa"
-                    srcDoc={previewHtml}
-                    className="w-full h-96 border-0 rounded"
-                    sandbox="allow-same-origin"
-                  />
-                ) : (
-                  <p className="text-slate-400 text-xs">El contenido del correo se verá aquí.</p>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
+
+      <CampaignPreviewModal
+        open={previewModalOpen}
+        onClose={() => setPreviewModalOpen(false)}
+        templateHtml={previewHtml}
+        subject={subject}
+        preheader={preheader}
+        senderIds={senderIds}
+        senders={senders}
+      />
     </div>
   );
 }

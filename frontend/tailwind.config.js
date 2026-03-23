@@ -5,7 +5,7 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ["Montserrat", "system-ui", "sans-serif"],
+        sans: ["Montserrat"],
       },
       colors: {
         purple: "#6641ed",

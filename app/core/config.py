@@ -42,10 +42,16 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 1440  # 1 día (24 * 60)
 
-    # IPGeolocation API Key
+    # IPGeolocation API Key (fallback si no hay base MaxMind local)
     ipgeolocation_api_key: str | None = Field(
         default=None,
         env="IPGEOLOCATION_API_KEY",
+    )
+
+    # MaxMind GeoLite2 (.mmdb): City o Country — sin esto, solo API o "Unknown"
+    geoip2_database_path: str | None = Field(
+        default=None,
+        env="GEOIP2_DATABASE_PATH",
     )
 
     # CORS (producción: lista de orígenes separados por coma)

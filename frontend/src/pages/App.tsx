@@ -8,6 +8,10 @@ import { PlantillasPage } from "./dashboard/PlantillasPage";
 import { NuevaPlantillaPage } from "./dashboard/NuevaPlantillaPage";
 import { EditarPlantillaPage } from "./dashboard/EditarPlantillaPage";
 import { SendersPage } from "./dashboard/SendersPage";
+import { ListasPage } from "./dashboard/ListasPage";
+import { ListaDetallePage } from "./dashboard/ListaDetallePage";
+import { CreadoresPage } from "./dashboard/CreadoresPage";
+import { PruebasPage } from "./dashboard/PruebasPage";
 import { ReportesLayout } from "./dashboard/reportes/ReportesLayout";
 import { ReportesIndexPage } from "./dashboard/reportes/ReportesIndexPage";
 import { ReportesCampanasPage } from "./dashboard/reportes/ReportesCampanasPage";
@@ -28,6 +32,10 @@ export function App() {
         <Route path="plantillas/nueva" element={<NuevaPlantillaPage />} />
         <Route path="plantillas/editar/:id" element={<EditarPlantillaPage />} />
         <Route path="senders" element={<SendersPage />} />
+        <Route path="listas" element={<ListasPage />} />
+        <Route path="listas/:listId" element={<ListaDetallePage />} />
+        <Route path="creadores" element={<CreadoresPage />} />
+        <Route path="pruebas" element={<PruebasPage />} />
         <Route path="reportes" element={<ReportesLayout />}>
           <Route index element={<ReportesIndexPage />} />
           <Route path="campanas" element={<ReportesCampanasPage />} />

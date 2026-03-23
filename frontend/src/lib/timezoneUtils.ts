@@ -102,3 +102,12 @@ export function getCountriesByOffset(offset: string): CountryByOffset[] {
 
   return result;
 }
+
+/** Bandera regional (emoji) a partir de código ISO 3166-1 alpha-2 (ej. AR → 🇦🇷). */
+export function flagEmojiFromCountryCode(code: string): string {
+  if (!code || code.length !== 2) return "🌍";
+  const upper = code.toUpperCase();
+  return [...upper]
+    .map((c) => String.fromCodePoint(0x1f1e6 - 65 + c.charCodeAt(0)))
+    .join("");
+}
