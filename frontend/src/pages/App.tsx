@@ -37,7 +37,7 @@ export function App() {
         <Route path="listas/:listId" element={<ListaDetallePage />} />
         <Route path="creadores" element={<CreadoresPage />} />
         <Route path="pruebas" element={<PruebasPage />} />
-        <Route path="codigos-qr" element={<QrCodesPage />} />
+        {/*<Route path="codigos-qr" element={<QrCodesPage />} />*/}
         <Route path="reportes" element={<ReportesLayout />}>
           <Route index element={<ReportesIndexPage />} />
           <Route path="campanas" element={<ReportesCampanasPage />} />
