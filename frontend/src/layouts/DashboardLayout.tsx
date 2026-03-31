@@ -11,6 +11,7 @@ import {
   HiOutlineClipboardDocumentList,
   HiOutlineUserGroup,
   HiOutlineBeaker,
+  HiOutlineQrCode,
 } from "react-icons/hi2";
 import { HiOutlineMail, HiOutlineLogout } from "react-icons/hi";
 
@@ -57,6 +58,7 @@ const navSections: {
     title: "Entorno de prueba",
     items: [
       { to: "/dashboard/pruebas", label: "Pruebas", icon: HiOutlineBeaker, accent: "pink" },
+      { to: "/dashboard/codigos-qr", label: "Códigos QR", icon: HiOutlineQrCode, accent: "pink" },
     ],
   },
 ];

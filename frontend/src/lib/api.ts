@@ -13,6 +13,9 @@ export async function fetchWithAuth(
   const url = path.startsWith("http") ? path : `${base}${path}`;
   const headers = new Headers(options.headers);
   if (token) headers.set("Authorization", `Bearer ${token}`);
+  if (options.body instanceof FormData) {
+    headers.delete("Content-Type");
+  }
   return fetch(url, { ...options, headers });
 }
 
@@ -993,6 +996,135 @@ export async function createCampaign(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+/** Lista en GET /qr-codes/ */
+export interface QrCodeListRow {
+  id: string;
+  name: string | null;
+  target_url: string;
+  scan_count: number;
+  created_at: string;
+  /** generated: QR dibujado por el servidor; uploaded: archivo tuyo */
+  image_mode: "generated" | "uploaded";
+  /** URL que debe codificar el QR para que los escaneos cuenten (GET /qr/{id}/go) */
+  tracking_url: string;
+  image_path: string;
+  image_url: string;
+  /** Subir o quitar imagen incrementa esto; va en `image_url` para evitar caché del navegador. */
+  image_revision?: number;
+  /** Relleno al usar «Refrescar contador» (GET /qr-codes/{id}/scans). */
+  scans_by_day?: QrCodeScanDayRow[];
+}
+
+/** Detalle POST /qr-codes/ o GET /qr-codes/{id} */
+export interface QrCodeDetail extends QrCodeListRow {
+  created_by: string;
+  scan_redirect_path: string;
+}
+
+export interface QrCodeCreatePayload {
+  name?: string | null;
+  target_url: string;
+}
+
+export interface QrCodeScanDayRow {
+  day: string;
+  count: number;
+}
+
+export interface QrCodeScanCountResponse {
+  qr_code_id: string;
+  scan_count: number;
+  scans_by_day: QrCodeScanDayRow[];
+}
+
+export async function fetchQrCodes(): Promise<QrCodeListRow[]> {
+  const res = await fetchWithAuth("/qr-codes/");
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+export async function createQrCode(payload: QrCodeCreatePayload): Promise<QrCodeDetail> {
+  const res = await fetchWithAuth("/qr-codes/", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      name: payload.name?.trim() ? payload.name.trim() : null,
+      target_url: payload.target_url.trim(),
+    }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+/** POST /qr-codes/multipart — opcional archivo imagen (PNG/JPEG/WEBP) */
+export async function createQrCodeMultipart(
+  targetUrl: string,
+  name: string | null | undefined,
+  imageFile: File | null
+): Promise<QrCodeDetail> {
+  const fd = new FormData();
+  fd.append("target_url", targetUrl.trim());
+  const n = name?.trim();
+  if (n) fd.append("name", n);
+  if (imageFile) fd.append("image", imageFile);
+  const res = await fetchWithAuth("/qr-codes/multipart", {
+    method: "POST",
+    body: fd,
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+export async function uploadQrCodeCustomImage(qrCodeId: string, file: File): Promise<QrCodeDetail> {
+  const fd = new FormData();
+  fd.append("image", file);
+  const res = await fetchWithAuth(`/qr-codes/${qrCodeId}/custom-image`, {
+    method: "PUT",
+    body: fd,
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+export async function removeQrCodeCustomImage(qrCodeId: string): Promise<QrCodeDetail> {
+  const res = await fetchWithAuth(`/qr-codes/${qrCodeId}/custom-image`, { method: "DELETE" });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+export async function fetchQrCodeScanCount(qrCodeId: string): Promise<QrCodeScanCountResponse> {
+  const res = await fetchWithAuth(`/qr-codes/${qrCodeId}/scans`);
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+export async function deleteQrCode(qrCodeId: string): Promise<void> {
+  const res = await fetchWithAuth(`/qr-codes/${qrCodeId}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(await res.text());
+}
+
+export async function updateQrCode(
+  qrCodeId: string,
+  payload: {
+    name?: string | null;
+    target_url?: string | null;
+    clear_custom_image?: boolean;
+  }
+): Promise<QrCodeDetail> {
+  const body: Record<string, unknown> = {};
+  if (payload.name !== undefined) body.name = payload.name?.trim() ? payload.name.trim() : null;
+  if (payload.target_url !== undefined && payload.target_url !== null)
+    body.target_url = payload.target_url.trim();
+  if (payload.clear_custom_image === true) body.clear_custom_image = true;
+  const res = await fetchWithAuth(`/qr-codes/${qrCodeId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(await res.text());
   return res.json();

@@ -13,6 +13,7 @@ from app.lists import lists_router
 from app.creators import creators_router
 from app.creators_test import creators_test_router
 from app.lists_test import lists_test_router
+from app.qr_codes import qr_codes_router, qr_public_router
 from app.logs.request_logger import RequestLoggingMiddleware
 from app.db.migrate import bootstrap_schema
 
@@ -47,6 +48,8 @@ app.include_router(lists_router)
 app.include_router(creators_router)
 app.include_router(lists_test_router)
 app.include_router(creators_test_router)
+app.include_router(qr_codes_router)
+app.include_router(qr_public_router)
 
 
 @app.on_event("startup")

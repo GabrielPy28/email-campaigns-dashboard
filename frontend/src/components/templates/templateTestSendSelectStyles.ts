@@ -332,3 +332,74 @@ export const snippetVariableSelectStyles: StylesConfig<
   }),
   indicatorSeparator: () => ({ display: "none" }),
 };
+
+/** Opción genérica para selects del diseñador de QR (modal claro / índigo). */
+export type QrDesignerSelectOption = { value: string; label: string };
+
+/** Diseñador QR — single select compacto, texto oscuro legible sobre fondo blanco. */
+export const qrDesignerSelectStyles: StylesConfig<
+  QrDesignerSelectOption,
+  false,
+  GroupBase<QrDesignerSelectOption>
+> = {
+  control: (base, state) => ({
+    ...base,
+    minHeight: 42,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: state.isFocused ? "rgb(99 102 241)" : "rgb(203 213 225)",
+    backgroundColor: state.isDisabled ? "rgb(248 250 252)" : "#ffffff",
+    boxShadow: state.isFocused ? "0 0 0 2px rgb(99 102 241 / 0.22)" : "0 1px 2px rgb(15 23 42 / 0.04)",
+    "&:hover": { borderColor: "rgb(165 180 252)" },
+  }),
+  valueContainer: (base) => ({
+    ...base,
+    padding: "6px 10px",
+  }),
+  placeholder: (base) => ({
+    ...base,
+    color: "rgb(100 116 139)",
+    fontSize: "0.875rem",
+  }),
+  singleValue: (base) => ({
+    ...base,
+    color: "rgb(15 23 42)",
+    fontWeight: 500,
+  }),
+  input: (base) => ({
+    ...base,
+    color: "rgb(15 23 42)",
+  }),
+  menu: (base) => ({
+    ...base,
+    borderRadius: 10,
+    border: "1px solid rgb(199 210 254)",
+    boxShadow: "0 18px 44px -12px rgb(15 23 42 / 0.18)",
+    overflow: "hidden",
+    paddingTop: 4,
+    paddingBottom: 4,
+  }),
+  menuPortal,
+  option: (base, state) => ({
+    ...base,
+    cursor: "pointer",
+    padding: "8px 12px",
+    fontSize: "0.875rem",
+    backgroundColor: state.isSelected
+      ? "rgb(224 231 255)"
+      : state.isFocused
+        ? "rgb(238 242 255)"
+        : "transparent",
+    color: state.isSelected ? "rgb(49 46 129)" : "rgb(15 23 42)",
+  }),
+  dropdownIndicator: (base, state) => ({
+    ...base,
+    color: state.isFocused ? "rgb(79 70 229)" : "rgb(148 163 184)",
+  }),
+  clearIndicator: (base) => ({
+    ...base,
+    color: "rgb(148 163 184)",
+    ":hover": { color: "rgb(79 70 229)" },
+  }),
+  indicatorSeparator: () => ({ display: "none" }),
+};

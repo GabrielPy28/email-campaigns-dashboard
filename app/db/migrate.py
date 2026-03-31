@@ -90,3 +90,39 @@ def bootstrap_schema() -> None:
                 """
             )
         )
+        conn.execute(
+            text(
+                """
+                ALTER TABLE qr_codes
+                ADD COLUMN IF NOT EXISTS custom_image_data BYTEA;
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                ALTER TABLE qr_codes
+                ADD COLUMN IF NOT EXISTS custom_image_mime VARCHAR(80);
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                ALTER TABLE qr_codes
+                ADD COLUMN IF NOT EXISTS image_revision INTEGER NOT NULL DEFAULT 0;
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS qr_code_scan_days (
+                    qr_code_id UUID NOT NULL REFERENCES qr_codes(id) ON DELETE CASCADE,
+                    scan_date DATE NOT NULL,
+                    count INTEGER NOT NULL DEFAULT 0,
+                    PRIMARY KEY (qr_code_id, scan_date)
+                );
+                """
+            )
+        )

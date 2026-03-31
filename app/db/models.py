@@ -1,16 +1,18 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Optional
 
 from sqlalchemy import (
     String,
     Integer,
     DateTime,
+    Date,
     ForeignKey,
     Table,
     Column,
     Text,
     Boolean,
     UniqueConstraint,
+    LargeBinary,
 )
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship, Mapped, mapped_column
@@ -351,6 +353,41 @@ class EmailClick(Base):
     ip_address: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     user_agent: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     device_category: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+
+
+class QrCode(Base):
+    """Código QR registrado: imagen pública y redirección con conteo de escaneos."""
+
+    __tablename__ = "qr_codes"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    target_url: Mapped[str] = mapped_column(String(2048), nullable=False)
+    scan_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, nullable=False
+    )
+    created_by: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    custom_image_data: Mapped[Optional[bytes]] = mapped_column(LargeBinary, nullable=True)
+    custom_image_mime: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
+    """Se incrementa al cambiar la imagen servida en /qr/{id}/image.png (invalidar caché del navegador)."""
+    image_revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+
+class QrCodeScanDay(Base):
+    """Escaneos agregados por día (UTC) para un código QR."""
+
+    __tablename__ = "qr_code_scan_days"
+
+    qr_code_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("qr_codes.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    scan_date: Mapped[date] = mapped_column(Date, primary_key=True)
+    count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
 
 class IpGeolocationCache(Base):
