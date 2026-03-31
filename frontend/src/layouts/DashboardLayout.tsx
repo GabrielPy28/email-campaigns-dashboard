@@ -58,7 +58,7 @@ const navSections: {
     title: "Entorno de prueba",
     items: [
       { to: "/dashboard/pruebas", label: "Pruebas", icon: HiOutlineBeaker, accent: "pink" },
-      { to: "/dashboard/codigos-qr", label: "Códigos QR", icon: HiOutlineQrCode, accent: "pink" },
+      //{ to: "/dashboard/codigos-qr", label: "Códigos QR", icon: HiOutlineQrCode, accent: "pink" },
     ],
   },
 ];
