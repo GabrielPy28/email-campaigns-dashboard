@@ -8,6 +8,7 @@ from __future__ import annotations
 import os
 import uuid
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from typing import Literal
 from io import BytesIO
 
@@ -18,6 +19,7 @@ from sqlalchemy import update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.core.security import get_current_user
 from app.db.session import get_db
 from app.db import models
@@ -39,6 +41,17 @@ def _api_public_base() -> str:
 
 def _scan_url_for_qr(qr_id: uuid.UUID) -> str:
     return f"{_api_public_base()}/qr/{qr_id}/go"
+
+
+def _scan_bucket_date() -> datetime.date:
+    tz_name = (get_settings().qr_scan_timezone or "").strip()
+    if tz_name:
+        try:
+            return datetime.now(ZoneInfo(tz_name)).date()
+        except Exception:
+            pass
+    # Fallback: hora local del sistema donde corre la API.
+    return datetime.now().date()
 
 
 def _image_mode(row: models.QrCode) -> Literal["generated", "uploaded"]:
@@ -351,7 +364,7 @@ def qr_scan_redirect(
     db: Session = Depends(get_db),
 ):
     """
-    URL codificada en el QR: incrementa el contador total, suma el día actual (UTC)
+    URL codificada en el QR: incrementa el contador total y suma el día actual
     en `qr_code_scan_days` y redirige a `target_url`.
     No requiere autenticación (lectores de QR abren el enlace directamente).
     """
@@ -359,7 +372,7 @@ def qr_scan_redirect(
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="QR no encontrado")
     target = row.target_url
-    today = datetime.utcnow().date()
+    today = _scan_bucket_date()
 
     db.execute(
         update(models.QrCode)

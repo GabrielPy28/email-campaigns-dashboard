@@ -71,10 +71,10 @@
     - Cuenta aperturas por país y devuelve un `CampaignLocationsReport` con `country_code`, `country_name` y `count`.
   - Se configura con la variable de entorno `IPGEOLOCATION_API_KEY`. Si no está definida, todos los países se marcan como `XX / Unknown`.
 - **Códigos QR (`/qr-codes` y rutas públicas `/qr`)**
-  - **Datos**: tablas `qr_codes` (destino, contador total, imagen opcional en binario, revisión de imagen para caché) y `qr_code_scan_days` (escaneos agregados por día en UTC: una fila por par código + fecha).
+  - **Datos**: tablas `qr_codes` (destino, contador total, imagen opcional en binario, revisión de imagen para caché) y `qr_code_scan_days` (escaneos agregados por día según la zona horaria configurada: una fila por par código + fecha).
   - **Frontend**: página en el dashboard bajo **Pruebas → Códigos QR** (`QrCodesPage`): alta con URL de destino, imagen opcional, diseñador visual (estilos, degradados, logo) y tabla con acciones (copiar URLs, subir/cambiar imagen, volver al QR generado por servidor, refrescar contador con desglose por día).
   - **URL de tracking (la que debe codificar el gráfico del QR)**:
-    - `GET {API_BASE_URL}/qr/{id}/go` — sin autenticación; incrementa `scan_count`, suma el conteo del **día actual en UTC** en `qr_code_scan_days` y responde **302** a `target_url`.
+    - `GET {API_BASE_URL}/qr/{id}/go` — sin autenticación; incrementa `scan_count`, suma el conteo del **día actual** en `qr_code_scan_days` y responde **302** a `target_url`.
     - Si el material impreso usa otra URL, los escaneos no pasan por este endpoint y no se contabilizan.
   - **Imagen pública del código**:
     - `GET {API_BASE_URL}/qr/{id}/image.png` — sin autenticación.
@@ -87,8 +87,8 @@
     - `GET /qr-codes/{id}`, `PATCH /qr-codes/{id}` (incl. `clear_custom_image`), `DELETE /qr-codes/{id}`.
     - `PUT /qr-codes/{id}/custom-image`: sube o sustituye la imagen del QR (límite típico 2 MiB).
     - `DELETE /qr-codes/{id}/custom-image`: elimina la imagen subida y vuelve al PNG generado en servidor.
-    - `GET /qr-codes/{id}/scans`: devuelve `scan_count` total y `scans_by_day` (lista `{ day: YYYY-MM-DD, count }` en UTC, días más recientes primero).
-  - **Configuración**: `API_BASE_URL` define el host absoluto embebido en el QR generado y en las `tracking_url` / `image_url` devueltas al cliente.
+    - `GET /qr-codes/{id}/scans`: devuelve `scan_count` total y `scans_by_day` (lista `{ day: YYYY-MM-DD, count }`, días más recientes primero).
+  - **Configuración**: `API_BASE_URL` define el host absoluto embebido en el QR generado y en las `tracking_url` / `image_url` devueltas al cliente. `QR_SCAN_TIMEZONE` permite controlar el corte de día (si no se define, se usa la hora local del servidor).
 - **Infraestructura y arranque**
   - Proyecto dockerizado (`docker-compose.yml`) con servicios:
     - `api` (FastAPI), `db` (Postgres 15), `redis`.

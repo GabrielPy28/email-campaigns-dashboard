@@ -22,8 +22,8 @@ import {
   type QrCodeListRow,
 } from "../../lib/api";
 
-/** Etiqueta legible para `YYYY-MM-DD` almacenado en UTC. */
-function formatScanDayUtc(isoDate: string): string {
+/** Etiqueta legible para `YYYY-MM-DD` del bucket diario configurado en backend. */
+function formatScanDay(isoDate: string): string {
   const parts = isoDate.split("-").map(Number);
   if (parts.length !== 3 || parts.some((n) => Number.isNaN(n))) return isoDate;
   const [y, mo, da] = parts;
@@ -32,7 +32,6 @@ function formatScanDayUtc(isoDate: string): string {
     day: "numeric",
     month: "short",
     year: "numeric",
-    timeZone: "UTC",
   });
 }
 import { Button } from "../../components/ui/button";
@@ -279,7 +278,8 @@ export function QrCodesPage() {
             <h1 className="text-2xl font-bold text-slate-800">Códigos QR</h1>
             <p className="text-sm text-slate-600 mt-0.5 max-w-xl">
               Registra un destino, muestra la imagen del QR y cuenta los escaneos (cada apertura de la URL de
-              redirección). El desglose por día usa la fecha UTC del servidor; pulsa «Refrescar contador» para verlo.
+              redirección). El desglose por día usa la zona horaria configurada en backend; pulsa «Refrescar contador»
+              para verlo.
             </p>
           </div>
         </div>
@@ -460,14 +460,14 @@ export function QrCodesPage() {
                     {row.scans_by_day !== undefined ? (
                       row.scans_by_day.length > 0 ? (
                         <div className="rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-2 text-xs">
-                          <p className="font-semibold text-slate-700 mb-1.5">Por día (UTC)</p>
+                          <p className="font-semibold text-slate-700 mb-1.5">Por día</p>
                           <ul className="space-y-1 max-h-36 overflow-y-auto pr-1">
                             {row.scans_by_day.map((d) => (
                               <li
                                 key={d.day}
                                 className="flex justify-between gap-4 text-slate-600 border-b border-slate-100/80 last:border-0 pb-1 last:pb-0"
                               >
-                                <span className="capitalize">{formatScanDayUtc(d.day)}</span>
+                                <span className="capitalize">{formatScanDay(d.day)}</span>
                                 <span className="tabular-nums font-semibold text-slate-800">{d.count}</span>
                               </li>
                             ))}

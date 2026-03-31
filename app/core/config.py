@@ -54,6 +54,10 @@ class Settings(BaseSettings):
         env="GEOIP2_DATABASE_PATH",
     )
 
+    # Zona horaria para agrupar escaneos QR por día (ej. America/Mexico_City).
+    # Si está vacía, se usa la hora local del servidor.
+    qr_scan_timezone: str | None = Field(default=None, env="QR_SCAN_TIMEZONE")
+
     # CORS (producción: lista de orígenes separados por coma)
     cors_origins: str = "*"
 
