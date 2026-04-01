@@ -1,6 +1,6 @@
-import type { imagesection } from "./types";
+import type { DocSection } from "./types";
 
-export const DOCUMENTATION_SECTIONS: imagesection[] = [
+export const DOCUMENTATION_SECTIONS: DocSection[] = [
   {
     slug: "bienvenida",
     title: "Bienvenida al manual",
@@ -28,7 +28,7 @@ export const DOCUMENTATION_SECTIONS: imagesection[] = [
       {
         type: "note",
         text: "Los textos marcados como Nota son recomendaciones. Los recuadros de advertencia indican seguridad o cumplimiento y deben leerse con atención. Esta guía incluye capturas reales por módulo. Si alguna no aparece, valide que el archivo exista en frontend/public/images/ con el nombre correcto.",
-      }
+      },
     ],
   },
   {
@@ -625,6 +625,6 @@ export const DOCUMENTATION_SECTIONS: imagesection[] = [
   },
 ];
 
-export function getimagesectionBySlug(slug: string): imagesection | undefined {
+export function getDocSectionBySlug(slug: string): DocSection | undefined {
   return DOCUMENTATION_SECTIONS.find((s) => s.slug === slug);
 }
