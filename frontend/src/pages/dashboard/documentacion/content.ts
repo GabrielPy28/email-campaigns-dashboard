@@ -1,6 +1,6 @@
-import type { DocSection } from "./types";
+import type { imagesection } from "./types";
 
-export const DOCUMENTATION_SECTIONS: DocSection[] = [
+export const DOCUMENTATION_SECTIONS: imagesection[] = [
   {
     slug: "bienvenida",
     title: "Bienvenida al manual",
@@ -27,19 +27,15 @@ export const DOCUMENTATION_SECTIONS: DocSection[] = [
       },
       {
         type: "note",
-        text: "Los textos marcados como Nota son recomendaciones. Los recuadros de advertencia indican seguridad o cumplimiento y deben leerse con atención.",
-      },
-      {
-        type: "note",
-        text: "Esta guía incluye capturas reales por módulo. Si alguna no aparece, valide que el archivo exista en frontend/public/docs/ con el nombre correcto.",
-      },
+        text: "Los textos marcados como Nota son recomendaciones. Los recuadros de advertencia indican seguridad o cumplimiento y deben leerse con atención. Esta guía incluye capturas reales por módulo. Si alguna no aparece, valide que el archivo exista en frontend/public/images/ con el nombre correcto.",
+      }
     ],
   },
   {
     slug: "que-es",
     title: "Qué es la herramienta",
     description: "Funciones principales de la plataforma.",
-    cardImage: "/docs/hero-plataforma.svg",
+    cardImage: "/images/hero-plataforma.svg",
     blocks: [
       {
         type: "paragraph",
@@ -56,9 +52,9 @@ export const DOCUMENTATION_SECTIONS: DocSection[] = [
       },
       {
         type: "media",
-        image: "/docs/hero-plataforma.svg",
+        image: "/images/hero-plataforma.svg",
         imageAlt: "Esquema conceptual de la plataforma",
-        caption: "Puede sustituir esta imagen por una captura real en public/docs/hero-plataforma.svg o .png.",
+        caption: "Puede sustituir esta imagen por una captura real en public/images/hero-plataforma.svg o .png.",
       },
     ],
   },
@@ -66,7 +62,7 @@ export const DOCUMENTATION_SECTIONS: DocSection[] = [
     slug: "requisitos-acceso",
     title: "Requisitos y acceso",
     description: "Navegador, credenciales y buenas prácticas al entrar al panel.",
-    cardImage: "/docs/login.png",
+    cardImage: "/images/login.png",
     blocks: [
       {
         type: "heading",
@@ -101,7 +97,7 @@ export const DOCUMENTATION_SECTIONS: DocSection[] = [
       },
       {
         type: "media",
-        image: "/docs/login.png",
+        image: "/images/login.png",
         imageAlt: "Pantalla de acceso de La Neta",
         caption: "Acceso al portal: vista de inicio de sesión.",
       },
@@ -142,7 +138,7 @@ export const DOCUMENTATION_SECTIONS: DocSection[] = [
     slug: "campanas",
     title: "Campañas",
     description: "Listado, filtros, análisis, exportaciones y creación paso a paso.",
-    cardImage: "/docs/campanas-kpis.png",
+    cardImage: "/images/campanas-kpis.png",
     blocks: [
       {
         type: "heading",
@@ -176,9 +172,9 @@ export const DOCUMENTATION_SECTIONS: DocSection[] = [
       },
       {
         type: "media",
-        image: "/docs/campanas-kpis.png",
+        image: "/images/campanas-kpis.png",
         imageAlt: "Vista de campañas con KPIs y gráficos",
-        caption: "Sustituya por su captura en public/docs/campanas-kpis.png.",
+        caption: "Sustituya por su captura en public/images/campanas-kpis.png.",
       },
       {
         type: "heading",
@@ -235,7 +231,7 @@ export const DOCUMENTATION_SECTIONS: DocSection[] = [
     slug: "plantillas",
     title: "Plantillas",
     description: "Crear, editar y usar variables en el HTML del correo.",
-    cardImage: "/docs/plantillaspage.png",
+    cardImage: "/images/plantillaspage.png",
     blocks: [
       {
         type: "steps",
@@ -255,7 +251,7 @@ export const DOCUMENTATION_SECTIONS: DocSection[] = [
       },
       {
         type: "media",
-        image: "/docs/plantillaspage.png",
+        image: "/images/plantillaspage.png",
         imageAlt: "Módulo de plantillas",
         caption: "Módulo de Plantillas: gestión, edición y descarga de HTML.",
       },
@@ -265,7 +261,7 @@ export const DOCUMENTATION_SECTIONS: DocSection[] = [
     slug: "senders",
     title: "Senders (remitentes)",
     description: "Alta y gestión de las direcciones desde las que se envía.",
-    cardImage: "/docs/senderspage.png",
+    cardImage: "/images/senderspage.png",
     blocks: [
       {
         type: "steps",
@@ -282,7 +278,7 @@ export const DOCUMENTATION_SECTIONS: DocSection[] = [
       },
       {
         type: "media",
-        image: "/docs/senderspage.png",
+        image: "/images/senderspage.png",
         imageAlt: "Módulo de remitentes",
         caption: "Módulo de Remitentes (Senders): administración de cuentas de envío.",
       },
@@ -311,7 +307,7 @@ export const DOCUMENTATION_SECTIONS: DocSection[] = [
     slug: "listas",
     title: "Listas",
     description: "Grupos de creadores vinculados para usar como audiencia.",
-    cardImage: "/docs/listaspage.png",
+    cardImage: "/images/listaspage.png",
     blocks: [
       {
         type: "steps",
@@ -328,7 +324,7 @@ export const DOCUMENTATION_SECTIONS: DocSection[] = [
       },
       {
         type: "media",
-        image: "/docs/listaspage.png",
+        image: "/images/listaspage.png",
         imageAlt: "Módulo de listas",
         caption: "Módulo de Listas: creación y filtrado de audiencias.",
       },
@@ -353,7 +349,7 @@ export const DOCUMENTATION_SECTIONS: DocSection[] = [
     slug: "creadores",
     title: "Creadores",
     description: "Fichas de contactos y datos para personalizar correos.",
-    cardImage: "/docs/creadorespage.png",
+    cardImage: "/images/creadorespage.png",
     blocks: [
       {
         type: "steps",
@@ -365,7 +361,7 @@ export const DOCUMENTATION_SECTIONS: DocSection[] = [
       },
       {
         type: "media",
-        image: "/docs/creadorespage.png",
+        image: "/images/creadorespage.png",
         imageAlt: "Módulo de creadores",
         caption: "Creadores registrados: filtro, edición y estado.",
       },
@@ -391,7 +387,7 @@ export const DOCUMENTATION_SECTIONS: DocSection[] = [
       },
       {
         type: "media",
-        image: "/docs/creadorestestpage.png",
+        image: "/images/creadorestestpage.png",
         imageAlt: "Módulo de creadores de prueba",
         caption: "Creadores de prueba: entorno seguro para validaciones y QA.",
       },
@@ -629,6 +625,6 @@ export const DOCUMENTATION_SECTIONS: DocSection[] = [
   },
 ];
 
-export function getDocSectionBySlug(slug: string): DocSection | undefined {
+export function getimagesectionBySlug(slug: string): imagesection | undefined {
   return DOCUMENTATION_SECTIONS.find((s) => s.slug === slug);
 }
