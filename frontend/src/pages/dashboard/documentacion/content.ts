@@ -10,7 +10,7 @@ export const DOCUMENTATION_SECTIONS: DocSection[] = [
         type: "media",
         image: "https://la-neta-videos-ubicacion.s3.us-east-1.amazonaws.com/logo_optimizado.png",
         imageAlt: "Logo de La Neta",
-        caption: "Bienvenido al centro de ayuda de La Neta.",
+        caption: "Centro de documentación oficial de La Neta.",
       },
       {
         type: "paragraph",
@@ -28,6 +28,10 @@ export const DOCUMENTATION_SECTIONS: DocSection[] = [
       {
         type: "note",
         text: "Los textos marcados como Nota son recomendaciones. Los recuadros de advertencia indican seguridad o cumplimiento y deben leerse con atención.",
+      },
+      {
+        type: "note",
+        text: "Esta guía incluye capturas reales por módulo. Si alguna no aparece, valide que el archivo exista en frontend/public/docs/ con el nombre correcto.",
       },
     ],
   },
@@ -62,7 +66,7 @@ export const DOCUMENTATION_SECTIONS: DocSection[] = [
     slug: "requisitos-acceso",
     title: "Requisitos y acceso",
     description: "Navegador, credenciales y buenas prácticas al entrar al panel.",
-    cardImage: "/docs/images/login.png",
+    cardImage: "/docs/login.png",
     blocks: [
       {
         type: "heading",
@@ -97,7 +101,7 @@ export const DOCUMENTATION_SECTIONS: DocSection[] = [
       },
       {
         type: "media",
-        image: "/docs/images/login.png",
+        image: "/docs/login.png",
         imageAlt: "Pantalla de acceso de La Neta",
         caption: "Acceso al portal: vista de inicio de sesión.",
       },
@@ -231,7 +235,7 @@ export const DOCUMENTATION_SECTIONS: DocSection[] = [
     slug: "plantillas",
     title: "Plantillas",
     description: "Crear, editar y usar variables en el HTML del correo.",
-    cardImage: "/docs/images/plantillaspage.png",
+    cardImage: "/docs/plantillaspage.png",
     blocks: [
       {
         type: "steps",
@@ -251,7 +255,7 @@ export const DOCUMENTATION_SECTIONS: DocSection[] = [
       },
       {
         type: "media",
-        image: "/docs/images/plantillaspage.png",
+        image: "/docs/plantillaspage.png",
         imageAlt: "Módulo de plantillas",
         caption: "Módulo de Plantillas: gestión, edición y descarga de HTML.",
       },
@@ -261,7 +265,7 @@ export const DOCUMENTATION_SECTIONS: DocSection[] = [
     slug: "senders",
     title: "Senders (remitentes)",
     description: "Alta y gestión de las direcciones desde las que se envía.",
-    cardImage: "/docs/images/senderspage.png",
+    cardImage: "/docs/senderspage.png",
     blocks: [
       {
         type: "steps",
@@ -278,7 +282,7 @@ export const DOCUMENTATION_SECTIONS: DocSection[] = [
       },
       {
         type: "media",
-        image: "/docs/images/senderspage.png",
+        image: "/docs/senderspage.png",
         imageAlt: "Módulo de remitentes",
         caption: "Módulo de Remitentes (Senders): administración de cuentas de envío.",
       },
@@ -307,7 +311,7 @@ export const DOCUMENTATION_SECTIONS: DocSection[] = [
     slug: "listas",
     title: "Listas",
     description: "Grupos de creadores vinculados para usar como audiencia.",
-    cardImage: "/docs/images/listaspage.png",
+    cardImage: "/docs/listaspage.png",
     blocks: [
       {
         type: "steps",
@@ -324,7 +328,7 @@ export const DOCUMENTATION_SECTIONS: DocSection[] = [
       },
       {
         type: "media",
-        image: "/docs/images/listaspage.png",
+        image: "/docs/listaspage.png",
         imageAlt: "Módulo de listas",
         caption: "Módulo de Listas: creación y filtrado de audiencias.",
       },
@@ -349,7 +353,7 @@ export const DOCUMENTATION_SECTIONS: DocSection[] = [
     slug: "creadores",
     title: "Creadores",
     description: "Fichas de contactos y datos para personalizar correos.",
-    cardImage: "/docs/images/creadorespage.png",
+    cardImage: "/docs/creadorespage.png",
     blocks: [
       {
         type: "steps",
@@ -361,7 +365,7 @@ export const DOCUMENTATION_SECTIONS: DocSection[] = [
       },
       {
         type: "media",
-        image: "/docs/images/creadorespage.png",
+        image: "/docs/creadorespage.png",
         imageAlt: "Módulo de creadores",
         caption: "Creadores registrados: filtro, edición y estado.",
       },
@@ -387,7 +391,7 @@ export const DOCUMENTATION_SECTIONS: DocSection[] = [
       },
       {
         type: "media",
-        image: "/docs/images/creadorestestpage.png",
+        image: "/docs/creadorestestpage.png",
         imageAlt: "Módulo de creadores de prueba",
         caption: "Creadores de prueba: entorno seguro para validaciones y QA.",
       },

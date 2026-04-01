@@ -11,6 +11,7 @@ function DocMediaBlock({
   videoTitle,
 }: Extract<DocBlock, { type: "media" }>) {
   const [imgFailed, setImgFailed] = useState(false);
+  const isLogo = (imageAlt || "").toLowerCase().includes("logo");
 
   return (
     <figure
@@ -29,11 +30,14 @@ function DocMediaBlock({
           />
         </div>
       ) : image && !imgFailed ? (
-        <div className="bg-slate-50/80">
+        <div className={cn("bg-slate-50/80", isLogo && "py-10")}>
           <img
             src={image}
             alt={imageAlt || ""}
-            className="mx-auto max-h-[420px] w-full object-contain"
+            className={cn(
+              "mx-auto w-full object-contain",
+              isLogo ? "max-h-36 px-6" : "max-h-[560px] px-2 sm:px-4"
+            )}
             onError={() => setImgFailed(true)}
           />
         </div>
@@ -46,7 +50,7 @@ function DocMediaBlock({
           )}
           <p className="max-w-md text-sm leading-relaxed text-slate-600">
             {image && imgFailed
-              ? "No se encontró la imagen. Coloque el archivo en public/docs/ con la ruta indicada en la documentación."
+              ? `No se encontró la imagen: ${image}. Coloque el archivo en frontend/public/docs/ (por ejemplo frontend/public/docs/login.png).`
               : "Aquí puede mostrarse una imagen o vídeo. Añada archivos en la carpeta public/docs/ o configure VITE_DOCS_WELCOME_VIDEO_EMBED para el vídeo de bienvenida."}
           </p>
         </div>

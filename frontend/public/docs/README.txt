@@ -1,9 +1,12 @@
 Coloque aquí las imágenes del manual (PNG, WebP o JPG).
 
 Ejemplos de rutas usadas en la app:
-  /docs/campanas-kpis.png
-  /docs/nueva-campana.png
-  /docs/menu-panel.png
+  /docs/login.png
+  /docs/plantillaspage.png
+  /docs/senderspage.png
+  /docs/creadorespage.png
+  /docs/creadorestestpage.png
+  /docs/listaspage.png
 
 Si una imagen no existe, la interfaz mostrará un marcador de posición hasta que suba el archivo.
 
