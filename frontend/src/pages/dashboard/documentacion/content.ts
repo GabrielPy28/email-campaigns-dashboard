@@ -1,11 +1,5 @@
 import type { DocSection } from "./types";
 
-/** Vídeo de bienvenida: URL de embed (YouTube "embed/ID" o similar). Opcional vía .env: VITE_DOCS_WELCOME_VIDEO_EMBED */
-export const DOCS_WELCOME_VIDEO_EMBED =
-  typeof import.meta.env.VITE_DOCS_WELCOME_VIDEO_EMBED === "string"
-    ? import.meta.env.VITE_DOCS_WELCOME_VIDEO_EMBED
-    : "";
-
 export const DOCUMENTATION_SECTIONS: DocSection[] = [
   {
     slug: "bienvenida",
@@ -14,23 +8,21 @@ export const DOCUMENTATION_SECTIONS: DocSection[] = [
     blocks: [
       {
         type: "media",
-        videoEmbedUrl: DOCS_WELCOME_VIDEO_EMBED || undefined,
-        videoTitle: "Introducción a la plataforma",
-        caption: DOCS_WELCOME_VIDEO_EMBED
-          ? "Vídeo de introducción."
-          : "Puede enlazar un vídeo de bienvenida: defina la variable de entorno VITE_DOCS_WELCOME_VIDEO_EMBED con la URL de inserción (por ejemplo https://www.youtube-nocookie.com/embed/SU_ID).",
+        image: "https://la-neta-videos-ubicacion.s3.us-east-1.amazonaws.com/logo_optimizado.png",
+        imageAlt: "Logo de La Neta",
+        caption: "Bienvenido al centro de ayuda de La Neta.",
       },
       {
         type: "paragraph",
-        text: "Esta documentación está integrada en el mismo panel que usa para trabajar. Puede saltar a cualquier tema desde el índice lateral (en pantallas grandes) o desde las tarjetas de la página principal de Documentación.",
+        text: "Bienvenido al centro de documentación oficial de la plataforma. Aquí encontrará guías claras y paso a paso para operar campañas, administrar audiencia, gestionar plantillas y remitentes, y analizar resultados con buenas prácticas.",
       },
       {
         type: "steps",
-        title: "Cómo aprovechar mejor esta guía",
+        title: "Qué encontrará en esta documentación",
         items: [
-          "Si es su primer día, lea «Qué es la herramienta» y «Requisitos y acceso».",
-          "Si ya envía campañas, vaya directamente a «Campañas» o «Solución de problemas».",
-          "Use el menú lateral de esta sección para cambiar de tema sin perder el contexto del panel.",
+          "Guías por módulo con ejemplos visuales del sistema.",
+          "Procedimientos operativos para usuarios nuevos y avanzados.",
+          "Recomendaciones de seguridad, cumplimiento y solución de problemas.",
         ],
       },
       {
@@ -70,6 +62,7 @@ export const DOCUMENTATION_SECTIONS: DocSection[] = [
     slug: "requisitos-acceso",
     title: "Requisitos y acceso",
     description: "Navegador, credenciales y buenas prácticas al entrar al panel.",
+    cardImage: "/docs/images/login.png",
     blocks: [
       {
         type: "heading",
@@ -101,6 +94,12 @@ export const DOCUMENTATION_SECTIONS: DocSection[] = [
         type: "warning",
         title: "Seguridad",
         text: "No guarde la contraseña en equipos compartidos. Cierre sesión al alejarse del puesto.",
+      },
+      {
+        type: "media",
+        image: "/docs/images/login.png",
+        imageAlt: "Pantalla de acceso de La Neta",
+        caption: "Acceso al portal: vista de inicio de sesión.",
       },
     ],
   },
@@ -232,6 +231,7 @@ export const DOCUMENTATION_SECTIONS: DocSection[] = [
     slug: "plantillas",
     title: "Plantillas",
     description: "Crear, editar y usar variables en el HTML del correo.",
+    cardImage: "/docs/images/plantillaspage.png",
     blocks: [
       {
         type: "steps",
@@ -249,12 +249,19 @@ export const DOCUMENTATION_SECTIONS: DocSection[] = [
         type: "note",
         text: "Si falta un dato para una persona, el campo puede quedar vacío o con un valor por defecto según la configuración.",
       },
+      {
+        type: "media",
+        image: "/docs/images/plantillaspage.png",
+        imageAlt: "Módulo de plantillas",
+        caption: "Módulo de Plantillas: gestión, edición y descarga de HTML.",
+      },
     ],
   },
   {
     slug: "senders",
     title: "Senders (remitentes)",
     description: "Alta y gestión de las direcciones desde las que se envía.",
+    cardImage: "/docs/images/senderspage.png",
     blocks: [
       {
         type: "steps",
@@ -268,6 +275,12 @@ export const DOCUMENTATION_SECTIONS: DocSection[] = [
         type: "warning",
         title: "Seguridad y reputación",
         text: "Solo el personal autorizado debe crear senders. Remitentes no válidos pueden dañar la reputación del dominio y violar políticas del proveedor.",
+      },
+      {
+        type: "media",
+        image: "/docs/images/senderspage.png",
+        imageAlt: "Módulo de remitentes",
+        caption: "Módulo de Remitentes (Senders): administración de cuentas de envío.",
       },
     ],
   },
@@ -294,6 +307,7 @@ export const DOCUMENTATION_SECTIONS: DocSection[] = [
     slug: "listas",
     title: "Listas",
     description: "Grupos de creadores vinculados para usar como audiencia.",
+    cardImage: "/docs/images/listaspage.png",
     blocks: [
       {
         type: "steps",
@@ -307,6 +321,12 @@ export const DOCUMENTATION_SECTIONS: DocSection[] = [
         type: "warning",
         title: "Cumplimiento",
         text: "Cargue solo personas respecto a las cuales exista base legal para el envío (consentimiento u otra base aplicable). Consulte con su responsable legal.",
+      },
+      {
+        type: "media",
+        image: "/docs/images/listaspage.png",
+        imageAlt: "Módulo de listas",
+        caption: "Módulo de Listas: creación y filtrado de audiencias.",
       },
     ],
   },
@@ -329,6 +349,7 @@ export const DOCUMENTATION_SECTIONS: DocSection[] = [
     slug: "creadores",
     title: "Creadores",
     description: "Fichas de contactos y datos para personalizar correos.",
+    cardImage: "/docs/images/creadorespage.png",
     blocks: [
       {
         type: "steps",
@@ -337,6 +358,12 @@ export const DOCUMENTATION_SECTIONS: DocSection[] = [
           "Consulte, cree o edite fichas según sus permisos.",
           "Los perfiles por plataforma y campos extra alimentan las variables de las plantillas.",
         ],
+      },
+      {
+        type: "media",
+        image: "/docs/images/creadorespage.png",
+        imageAlt: "Módulo de creadores",
+        caption: "Creadores registrados: filtro, edición y estado.",
       },
     ],
   },
@@ -357,6 +384,12 @@ export const DOCUMENTATION_SECTIONS: DocSection[] = [
           "Use listas y creadores de prueba separados de producción.",
           "Ideal para formación sin impacto en clientes reales.",
         ],
+      },
+      {
+        type: "media",
+        image: "/docs/images/creadorestestpage.png",
+        imageAlt: "Módulo de creadores de prueba",
+        caption: "Creadores de prueba: entorno seguro para validaciones y QA.",
       },
       {
         type: "heading",

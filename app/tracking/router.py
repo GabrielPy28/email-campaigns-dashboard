@@ -98,6 +98,30 @@ def track_click(
             device_category=device,
         )
     )
+
+    # Si hubo clic pero no existe apertura previa para ese destinatario/campaña,
+    # registramos una apertura implícita para mantener coherencia de métricas.
+    # (Muchos clientes bloquean el pixel de apertura pero permiten clicks).
+    has_open = (
+        db.query(models.EmailOpen.id)
+        .filter(
+            models.EmailOpen.campaign_id == campaign_id,
+            models.EmailOpen.recipient_id == recipient_id,
+        )
+        .first()
+        is not None
+    )
+    if not has_open:
+        db.add(
+            models.EmailOpen(
+                campaign_id=campaign_id,
+                recipient_id=recipient_id,
+                ip_address=ip,
+                user_agent=ua,
+                device_category=device,
+            )
+        )
+
     db.commit()
 
     try:

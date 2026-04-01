@@ -132,3 +132,8 @@ Al enviar una campaña, el backend:
 
 Esto alimenta el mapa de calor geográfico en el dashboard de reportes, sin sobrepasar fácilmente el límite diario de créditos de ipgeolocation.io.
 
+recipient_id	email	aperturas	ultima_apertura	clics	ultimo_clic
+46635d7a-0164-4cce-99ab-53df3724905a	gabriel@laneta.com	1	2026-04-01T06:38:15.187616	4	2026-04-01T06:38:53.477168
+b72ca8ce-8d65-4f3c-a8e3-d44290ddc3ca	gabrielparenas27@gmail.com	0		5	2026-04-01T06:43:39.321586
+1d064925-b036-4a93-8172-fc7b096088dd	jesusparenas21@gmail.com	1	2026-04-01T06:39:34.764459	0	
+04e70c95-4ff3-4164-a767-931f0ce50f1e	karenas18@hotmail.com	0		0	

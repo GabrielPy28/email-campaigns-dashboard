@@ -198,7 +198,7 @@ def inject_tracking(
         width="1",
         height="1",
         style="display:none;visibility:hidden;",
-        alt="pixel de apertura",
+        alt="",
     )
 
     if soup.body:
