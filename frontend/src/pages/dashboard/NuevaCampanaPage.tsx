@@ -11,6 +11,7 @@ import {
   createCampaign,
   fetchCampaignDetail,
   fetchListas,
+  fetchSegmentaciones,
   fetchCreators,
   updateCampaign,
   type CampaignReadDetail,
@@ -18,6 +19,7 @@ import {
   type TemplateDetail,
   type SenderRead,
   type ListaRead,
+  type SegmentationRead,
   type CreatorRead,
 } from "../../lib/api";
 import { CampaignPreviewModal } from "../../components/campaigns/CampaignPreviewModal";
@@ -88,17 +90,19 @@ export function NuevaCampanaPage() {
   const [templateMode, setTemplateMode] = useState<"list" | "custom">("list");
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [customHtml, setCustomHtml] = useState("");
-  const [recipientMode, setRecipientMode] = useState<"lista" | "creadores">("lista");
+  const [recipientMode, setRecipientMode] = useState<"lista" | "creadores" | "segmentacion">("lista");
   const [listas, setListas] = useState<ListaRead[]>([]);
+  const [segmentaciones, setSegmentaciones] = useState<SegmentationRead[]>([]);
   const [creatorsSearchResults, setCreatorsSearchResults] = useState<CreatorRead[]>([]);
   const [creatorDirectory, setCreatorDirectory] = useState<Record<string, CreatorRead>>({});
   const [creatorSearch, setCreatorSearch] = useState("");
   const [loadingCreators, setLoadingCreators] = useState(false);
   const [selectedListaId, setSelectedListaId] = useState("");
+  const [selectedSegmentationId, setSelectedSegmentationId] = useState("");
   const [campaignCreatorIds, setCampaignCreatorIds] = useState<string[]>([]);
   const [editRecipientHint, setEditRecipientHint] = useState<{
     count: number;
-    fromList: boolean;
+    source: "lista" | "segmentacion" | "otro";
   } | null>(null);
   const [timezone, setTimezone] = useState("UTC-4");
   const [senderIds, setSenderIds] = useState<string[]>([]);
@@ -155,6 +159,18 @@ export function NuevaCampanaPage() {
   const listaSelectValue = useMemo(
     () => listaOptions.find((o) => o.value === selectedListaId) ?? null,
     [listaOptions, selectedListaId]
+  );
+  const segmentacionOptions = useMemo<ListOption[]>(
+    () =>
+      segmentaciones.map((s) => ({
+        value: s.id,
+        label: `${s.nombre} · ${s.num_creators} creadores`,
+      })),
+    [segmentaciones]
+  );
+  const segmentacionSelectValue = useMemo(
+    () => segmentacionOptions.find((o) => o.value === selectedSegmentationId) ?? null,
+    [segmentacionOptions, selectedSegmentationId]
   );
 
   const creatorOptions = useMemo(() => {
@@ -215,14 +231,16 @@ export function NuevaCampanaPage() {
   }, [creatorSearch, loadCreators]);
 
   useEffect(() => {
-    Promise.all([fetchTemplates(), fetchSenders(), fetchListas({ status: "activo" })])
-      .then(async ([t, s, ls]) => {
+    Promise.all([fetchTemplates(), fetchSenders(), fetchListas({ status: "activo" }), fetchSegmentaciones({ status: "activo" })])
+      .then(async ([t, s, ls, segs]) => {
         setTemplates(t);
         setSenders(s);
         setListas(ls);
+        setSegmentaciones(segs);
         if (t.length > 0 && !selectedTemplateId) setSelectedTemplateId(t[0].id);
         if (s.length > 0 && senderIds.length === 0) setSenderIds([s[0].id]);
         if (ls.length > 0 && !selectedListaId) setSelectedListaId(ls[0].id);
+        if (segs.length > 0 && !selectedSegmentationId) setSelectedSegmentationId(segs[0].id);
 
         if (editId) {
           try {
@@ -243,8 +261,12 @@ export function NuevaCampanaPage() {
               setSenderIds(details.sender_ids);
             }
             const n = details.recipients?.length ?? 0;
-            const fromList = Boolean(details.list_id);
-            setEditRecipientHint({ count: n, fromList });
+            const source = details.list_id
+              ? "lista"
+              : details.segmentation_id
+                ? "segmentacion"
+                : "otro";
+            setEditRecipientHint({ count: n, source });
           } catch (e) {
             setError(e instanceof Error ? e.message : "Error al cargar campaña para edición");
           }
@@ -289,6 +311,10 @@ export function NuevaCampanaPage() {
       }
       if (recipientMode === "creadores" && campaignCreatorIds.length === 0) {
         setSubmitError("Selecciona al menos un creador registrado.");
+        return;
+      }
+      if (recipientMode === "segmentacion" && !selectedSegmentationId) {
+        setSubmitError("Selecciona una segmentación.");
         return;
       }
     }
@@ -376,7 +402,9 @@ export function NuevaCampanaPage() {
           sender_ids: senderIds,
           ...(recipientMode === "lista"
             ? { list_id: selectedListaId }
-            : { creator_ids: campaignCreatorIds }),
+            : recipientMode === "segmentacion"
+              ? { segmentation_id: selectedSegmentationId }
+              : { creator_ids: campaignCreatorIds }),
         };
         await createCampaign(payload);
         await Swal.fire({
@@ -613,9 +641,11 @@ export function NuevaCampanaPage() {
                 <p className="font-medium text-sky-900">Destinatarios fijados al crear la campaña</p>
                 <p className="mt-1 text-xs text-slate-600">
                   {editRecipientHint.count} destinatario{editRecipientHint.count !== 1 ? "s" : ""}
-                  {editRecipientHint.fromList
+                  {editRecipientHint.source === "lista"
                     ? " (origen: lista guardada en la campaña)."
-                    : " (origen: creadores o carga manual registrada en el servidor)."}
+                    : editRecipientHint.source === "segmentacion"
+                      ? " (origen: segmentación guardada en la campaña)."
+                      : " (origen: creadores o carga manual registrada en el servidor)."}
                 </p>
                 <p className="mt-1.5 text-xs text-slate-500">
                   No se pueden cambiar desde esta pantalla; solo metadatos, plantilla y programación.
@@ -624,7 +654,7 @@ export function NuevaCampanaPage() {
             ) : (
               <>
                 <p className="text-xs text-slate-500 mb-3">
-                  Elige una lista existente o selecciona creadores del directorio. Los datos de plantilla
+                  Elige una lista, una segmentación o creadores del directorio. Los datos de plantilla
                   (variables <code className="text-[11px]">extra</code>) salen de cada creador.
                 </p>
                 <div className="flex flex-wrap gap-4 mb-4">
@@ -637,6 +667,16 @@ export function NuevaCampanaPage() {
                       className="text-sky-600"
                     />
                     <span className="text-sm text-slate-700">Por lista</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="recipientMode"
+                      checked={recipientMode === "segmentacion"}
+                      onChange={() => setRecipientMode("segmentacion")}
+                      className="text-sky-600"
+                    />
+                    <span className="text-sm text-slate-700">Por segmentación</span>
                   </label>
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
@@ -684,6 +724,25 @@ export function NuevaCampanaPage() {
                         de esta lista.
                       </p>
                     ) : null}
+                  </div>
+                ) : recipientMode === "segmentacion" ? (
+                  <div>
+                    <label
+                      className="block text-xs font-medium text-slate-600 mb-1.5"
+                      htmlFor="campana-segmentacion-select"
+                    >
+                      Segmentación *
+                    </label>
+                    <SelectList
+                      classNamePrefix="react-select-campana-segmentacion"
+                      options={segmentacionOptions}
+                      value={segmentacionSelectValue}
+                      onChange={(v: SingleValue<ListOption>) => setSelectedSegmentationId(v?.value ?? "")}
+                      placeholder={segmentaciones.length === 0 ? "No hay segmentaciones activas" : "Selecciona una segmentación…"}
+                      isDisabled={segmentaciones.length === 0}
+                      isClearable={false}
+                      noOptionsMessage={() => "No hay segmentaciones"}
+                    />
                   </div>
                 ) : (
                   <div>

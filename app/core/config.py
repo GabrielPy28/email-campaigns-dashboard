@@ -14,8 +14,10 @@ class Settings(BaseSettings):
     version: str = "0.1.0"
     environment: str = "development"
 
-    # Base de datos
+    # Base de datos (pooler, ej. Supabase :6543 + pgbouncer)
     database_url: str = "postgresql+psycopg2://postgres:postgres@db:5432/email_campaigns"
+    # Conexion directa para migraciones DDL (ej. Supabase :5432). Si no se define, se usa database_url.
+    direct_url: str | None = Field(default=None, env="DIRECT_URL")
     redis_url: str = "redis://redis:6379/0"
 
     # Brevo SMTP (prod / pruebas externas)
@@ -60,6 +62,12 @@ class Settings(BaseSettings):
 
     # CORS (producción: lista de orígenes separados por coma)
     cors_origins: str = "*"
+
+    # URL pública del frontend (formulario de baja de creadores, {{ unsubscribe_url }} en Jinja).
+    public_frontend_url: str = Field(
+        default="http://localhost:5173",
+        env="PUBLIC_FRONTEND_URL",
+    )
 
     class Config:
         env_file = ".env"

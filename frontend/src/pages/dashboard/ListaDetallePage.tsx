@@ -5,7 +5,6 @@ import {
   useMemo,
   useRef,
   useState,
-  type FormEvent,
 } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import type { StylesConfig } from "react-select";
@@ -13,24 +12,40 @@ import Select from "react-select";
 import type { GroupBase, MultiValue, SingleValue } from "react-select";
 import Swal from "sweetalert2";
 import {
+  HiOutlineCalendarDays,
+  HiOutlineCheckBadge,
   HiOutlineChevronDown,
   HiOutlineChevronRight,
+  HiOutlineCircleStack,
   HiOutlineFunnel,
+  HiOutlineInformationCircle,
+  HiOutlinePencilSquare,
+  HiOutlinePlusCircle,
+  HiOutlineSparkles,
   HiOutlineUserMinus,
+  HiOutlineUsers,
+  HiOutlineXMark,
 } from "react-icons/hi2";
 import { cn } from "../../lib/utils";
 import { AvatarWithFallback } from "../../components/AvatarWithFallback";
 import { selectListStyles, type ListOption } from "../../components/ui/select-list";
 import {
   fetchListaById,
+  fetchCreators,
   fetchListaRecipients,
   fetchPlatforms,
+  linkManyCreatorsToLista,
   removeCreatorFromLista,
+  uploadListaRecipientsFile,
   updateLista,
   type CreatorRead,
   type ListaRead,
   type PlatformRead,
 } from "../../lib/api";
+import {
+  downloadCreadoresPlantillaCsv,
+  downloadCreadoresPlantillaXlsx,
+} from "../../lib/creadoresBulkLayout";
 
 const LISTA_STATUS_OPTIONS: ListOption[] = [
   { value: "activo", label: "Activa" },
@@ -62,6 +77,11 @@ type CreatorRow = {
   mainPlatforme: string;
   status: "activo" | "inactivo";
   numCampaigns: number;
+};
+
+type CreatorOption = ListOption & {
+  email: string;
+  fullName: string;
 };
 
 function inferMainPlatform(c: CreatorRead): string {
@@ -97,6 +117,16 @@ function creatorReadToRow(c: CreatorRead): CreatorRow {
     mainPlatforme: inferMainPlatform(c),
     status: normalizeStatus(c.status),
     numCampaigns: c.num_campaigns,
+  };
+}
+
+function creatorToOption(c: CreatorRead): CreatorOption {
+  const fullName = c.full_name?.trim() || [c.first_name, c.last_name].filter(Boolean).join(" ").trim() || c.email;
+  return {
+    value: c.id,
+    label: `${fullName} · ${c.email}`,
+    email: c.email,
+    fullName,
   };
 }
 
@@ -555,6 +585,15 @@ export function ListaDetallePage() {
   const [platformsList, setPlatformsList] = useState<PlatformRead[]>([]);
   const [rowBusyId, setRowBusyId] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [manageOpen, setManageOpen] = useState(false);
+  const [creatorOptions, setCreatorOptions] = useState<CreatorOption[]>([]);
+  const [creatorSelectLoading, setCreatorSelectLoading] = useState(false);
+  const [selectedCreatorOptions, setSelectedCreatorOptions] = useState<readonly CreatorOption[]>([]);
+  const [bulkFile, setBulkFile] = useState<File | null>(null);
+  const [manageBusy, setManageBusy] = useState(false);
+  const [manageMode, setManageMode] = useState<"existing" | "import">("existing");
+  const [editingListName, setEditingListName] = useState(false);
+  const listNameInputRef = useRef<HTMLInputElement>(null);
 
   const filterPlatformOptions = useMemo<ListOption[]>(
     () =>
@@ -742,38 +781,87 @@ export function ListaDetallePage() {
     setAppliedRecipientFilters(emptyAppliedFilters());
   };
 
-  const saveListaMeta = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!listId || !lista) return;
-    const nombre = formNombre.trim();
-    if (!nombre) {
-      void Swal.fire({
-        icon: "warning",
-        title: "Nombre requerido",
-        text: "Indica un nombre para la lista.",
-      });
+  const persistListaMeta = useCallback(
+    async (params?: { nombre?: string; status?: "activo" | "inactivo"; silent?: boolean }) => {
+      if (!listId || !lista) return false;
+      const nombre = (params?.nombre ?? formNombre).trim();
+      if (!nombre) {
+        void Swal.fire({
+          icon: "warning",
+          title: "Nombre requerido",
+          text: "Indica un nombre para la lista.",
+        });
+        setFormNombre(lista.nombre);
+        return false;
+      }
+      const st =
+        params?.status ?? ((formListaStatus?.value ?? "activo") as "activo" | "inactivo");
+      const unchanged = nombre === lista.nombre && st === lista.status;
+      if (unchanged) return true;
+      setSavingMeta(true);
+      try {
+        const updated = await updateLista(listId, { nombre, status: st });
+        setLista(updated);
+        setFormNombre(updated.nombre);
+        setFormListaStatus(
+          LISTA_STATUS_OPTIONS.find((o) => o.value === updated.status) ?? LISTA_STATUS_OPTIONS[0]
+        );
+        if (!params?.silent) {
+          void Swal.fire({
+            icon: "success",
+            title: "Guardado",
+            timer: 1400,
+            showConfirmButton: false,
+          });
+        }
+        return true;
+      } catch (err) {
+        void Swal.fire({
+          icon: "error",
+          title: "Error",
+          text: err instanceof Error ? err.message : "No se pudo guardar.",
+        });
+        setFormNombre(lista.nombre);
+        setFormListaStatus(
+          LISTA_STATUS_OPTIONS.find((o) => o.value === lista.status) ?? LISTA_STATUS_OPTIONS[0]
+        );
+        return false;
+      } finally {
+        setSavingMeta(false);
+      }
+    },
+    [listId, lista, formNombre, formListaStatus]
+  );
+
+  useEffect(() => {
+    if (editingListName) {
+      listNameInputRef.current?.focus();
+      listNameInputRef.current?.select();
+    }
+  }, [editingListName]);
+
+  const startEditingListName = () => {
+    if (!lista || pageLoading || savingMeta) return;
+    setFormNombre(lista.nombre);
+    setEditingListName(true);
+  };
+
+  const commitListNameEdit = () => {
+    if (!lista) return;
+    const trimmed = formNombre.trim();
+    setEditingListName(false);
+    if (!trimmed) {
+      setFormNombre(lista.nombre);
       return;
     }
-    const st = (formListaStatus?.value ?? "activo") as "activo" | "inactivo";
-    setSavingMeta(true);
-    try {
-      const updated = await updateLista(listId, { nombre, status: st });
-      setLista(updated);
-      void Swal.fire({
-        icon: "success",
-        title: "Guardado",
-        timer: 1600,
-        showConfirmButton: false,
-      });
-    } catch (err) {
-      void Swal.fire({
-        icon: "error",
-        title: "Error",
-        text: err instanceof Error ? err.message : "No se pudo guardar.",
-      });
-    } finally {
-      setSavingMeta(false);
-    }
+    if (trimmed === lista.nombre) return;
+    void persistListaMeta({ nombre: trimmed });
+  };
+
+  const cancelListNameEdit = () => {
+    if (!lista) return;
+    setFormNombre(lista.nombre);
+    setEditingListName(false);
   };
 
   const removeFromList = async (row: CreatorRow) => {
@@ -814,7 +902,121 @@ export function ListaDetallePage() {
     }
   };
 
+  const openManageCreators = async () => {
+    if (!lista) return;
+    setManageOpen(true);
+    setManageMode("existing");
+    setSelectedCreatorOptions([]);
+    setBulkFile(null);
+    setCreatorSelectLoading(true);
+    try {
+      const creators = await fetchCreators({ status: "activo", limit: 500 });
+      setCreatorOptions(creators.map(creatorToOption));
+    } catch (err) {
+      void Swal.fire({
+        icon: "error",
+        title: "No se pudieron cargar creadores",
+        text: err instanceof Error ? err.message : "Error cargando creadores.",
+      });
+      setCreatorOptions([]);
+    } finally {
+      setCreatorSelectLoading(false);
+    }
+  };
+
+  const closeManageModal = () => {
+    if (manageBusy) return;
+    setManageOpen(false);
+    setManageMode("existing");
+    setSelectedCreatorOptions([]);
+    setBulkFile(null);
+  };
+
+  const submitExistingCreators = async () => {
+    if (!lista) return;
+    const ids = selectedCreatorOptions.map((o) => o.value);
+    if (ids.length === 0) {
+      void Swal.fire({
+        icon: "warning",
+        title: "Selecciona creadores",
+        text: "Elige al menos un creador para agregar a la lista.",
+      });
+      return;
+    }
+    setManageBusy(true);
+    try {
+      const res = await linkManyCreatorsToLista(lista.id, ids);
+      await reloadAll();
+      await Swal.fire({
+        icon: "success",
+        title: "Creadores procesados",
+        html: `
+          <div style="text-align:left;font-size:13px;line-height:1.5">
+            <div><strong>Nuevos en lista:</strong> ${res.linked_new}</div>
+            <div><strong>Ya estaban:</strong> ${res.already_in_list}</div>
+            <div><strong>No encontrados:</strong> ${res.not_found.length}</div>
+          </div>
+        `,
+        confirmButtonColor: "#7c3aed",
+      });
+      setSelectedCreatorOptions([]);
+    } catch (err) {
+      void Swal.fire({
+        icon: "error",
+        title: "Error",
+        text: err instanceof Error ? err.message : "No se pudieron agregar creadores.",
+      });
+    } finally {
+      setManageBusy(false);
+    }
+  };
+
+  const submitFileToList = async () => {
+    if (!listId || !bulkFile) return;
+    setManageBusy(true);
+    try {
+      const res = await uploadListaRecipientsFile(listId, bulkFile);
+      await reloadAll();
+      await Swal.fire({
+        icon: "success",
+        title: "Importación completada",
+        html: `
+          <div style="text-align:left;font-size:13px;line-height:1.5">
+            <div><strong>Registros del archivo:</strong> ${res.rows_upserted}</div>
+            <div><strong>Creados:</strong> ${res.creators_created}</div>
+            <div><strong>Actualizados:</strong> ${res.creators_updated}</div>
+            <div><strong>Nuevos en lista:</strong> ${res.linked_new}</div>
+            <div><strong>Ya estaban:</strong> ${res.already_in_list}</div>
+            <div><strong>Errores:</strong> ${res.errors.length}</div>
+          </div>
+        `,
+        confirmButtonColor: "#7c3aed",
+      });
+      setBulkFile(null);
+    } catch (err) {
+      void Swal.fire({
+        icon: "error",
+        title: "Importación fallida",
+        text: err instanceof Error ? err.message : "No se pudo procesar el archivo.",
+      });
+    } finally {
+      setManageBusy(false);
+    }
+  };
+
   const breadcrumbName = lista?.nombre ?? (pageLoading ? "…" : "Lista");
+  const createdAtLabel = lista?.created_at
+    ? new Date(lista.created_at).toLocaleString("es")
+    : "—";
+  const activeRecipientsCount = useMemo(
+    () => recipientsRaw.filter((r) => normalizeStatus(r.status) === "activo").length,
+    [recipientsRaw]
+  );
+  const platformCount = useMemo(() => {
+    const ids = new Set<string>();
+    recipientsRaw.forEach((r) => r.account_profiles.forEach((ap) => ids.add(ap.platform_id)));
+    return ids.size;
+  }, [recipientsRaw]);
 
   return (
     <div className="relative min-h-screen overflow-x-hidden bg-gradient-to-b from-slate-50 via-white to-slate-50/90">
@@ -859,58 +1061,173 @@ export function ListaDetallePage() {
 
         {!pageError && (
           <>
-            {/* Nombre y status de la lista */}
-            <div className="relative overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm shadow-slate-200/50 sm:p-8">
+            <div className="mt-4 relative overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm shadow-slate-200/50 sm:p-8">
               <div
                 className="pointer-events-none absolute -right-20 -top-20 h-56 w-56 rounded-full bg-gradient-to-br from-purple/12 via-transparent to-blue/10 blur-2xl"
                 aria-hidden
               />
-              <form
-                onSubmit={(e) => void saveListaMeta(e)}
-                className="relative grid gap-4 sm:grid-cols-2 lg:grid-cols-[1fr_220px_auto] lg:items-end"
-              >
-                <label className="flex flex-col gap-1">
-                  <span className="text-xs font-semibold text-slate-600">Nombre de la lista</span>
-                  <input
-                    type="text"
-                    value={formNombre}
-                    onChange={(e) => setFormNombre(e.target.value)}
-                    disabled={pageLoading}
-                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm !text-slate-900 placeholder:text-slate-400 focus:border-purple/40 focus:outline-none focus:ring-2 focus:ring-purple/15"
-                    placeholder="Nombre"
-                    maxLength={255}
-                    autoComplete="off"
-                  />
-                </label>
-                <div className="w-full min-w-[180px] max-w-[320px]">
-                  <label className="flex flex-col gap-1">
-                    <span className="text-xs font-semibold text-slate-600">Status</span>
-                    <Select<ListOption, false, GroupBase<ListOption>>
-                      instanceId="lista-detalle-meta-status"
-                      inputId="lista-detalle-meta-status-input"
-                      classNamePrefix="react-select-lista-detalle-meta"
-                      styles={selectListStyles}
-                      options={LISTA_STATUS_OPTIONS}
-                      value={formListaStatus}
-                      onChange={(opt: SingleValue<ListOption>) =>
-                        setFormListaStatus(opt ?? LISTA_STATUS_OPTIONS[0])
-                      }
-                      isDisabled={pageLoading}
-                      menuPosition="fixed"
-                      menuPortalTarget={typeof document !== "undefined" ? document.body : null}
-                    />
-                  </label>
+              <div className="relative flex flex-col gap-6">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-purple">
+                      Audiencia Reutilizable
+                    </p>
+                    <div className="group/title mt-2 flex min-w-0 flex-wrap items-center gap-2">
+                      {editingListName ? (
+                        <div className="flex min-w-0 max-w-xl flex-1 items-center gap-2">
+                          <input
+                            ref={listNameInputRef}
+                            type="text"
+                            value={formNombre}
+                            onChange={(e) => setFormNombre(e.target.value)}
+                            onBlur={() => void commitListNameEdit()}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                listNameInputRef.current?.blur();
+                              }
+                              if (e.key === "Escape") {
+                                e.preventDefault();
+                                cancelListNameEdit();
+                              }
+                            }}
+                            disabled={pageLoading || savingMeta}
+                            maxLength={255}
+                            autoComplete="off"
+                            className="min-w-0 flex-1 rounded-lg border border-purple/35 bg-white px-3 py-2 text-2xl font-bold tracking-tight !text-slate-900 shadow-sm focus:border-purple focus:outline-none focus:ring-2 focus:ring-purple/20 disabled:opacity-60 sm:text-3xl"
+                          />
+                          <button
+                            type="button"
+                            title="Cancelar"
+                            aria-label="Cancelar edición del nombre"
+                            disabled={pageLoading || savingMeta}
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              cancelListNameEdit();
+                            }}
+                            className="shrink-0 rounded-lg border border-slate-200 bg-white p-2 text-slate-500 shadow-sm transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700 disabled:opacity-40"
+                          >
+                            <HiOutlineXMark className="h-5 w-5 sm:h-6 sm:w-6" />
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <h1 className="min-w-0 truncate text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+                            {lista?.nombre ?? "Detalle de lista"}
+                          </h1>
+                          <button
+                            type="button"
+                            title="Editar nombre"
+                            aria-label="Editar nombre de la lista"
+                            onClick={() => startEditingListName()}
+                            disabled={pageLoading || savingMeta || !lista}
+                            className="shrink-0 rounded-lg p-1.5 text-purple opacity-0 transition hover:bg-purple/10 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple/30 disabled:opacity-30 group-hover/title:opacity-100"
+                          >
+                            <HiOutlinePencilSquare className="h-6 w-6" />
+                          </button>
+                        </>
+                      )}
+                    </div>
+                    <p className="mt-2 max-w-3xl text-sm leading-relaxed text-slate-600">
+                      Gestiona nombre, estado y miembros de tu lista para campañas futuras. Usa filtros
+                      avanzados para validar rápidamente la calidad de tus destinatarios.
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 flex-col items-stretch gap-2 self-start sm:flex-row sm:items-center">
+                    <div
+                      className={cn(
+                        "flex shrink-0 items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold",
+                        lista?.status === "inactivo"
+                          ? "border-slate-200 bg-slate-100 text-slate-700"
+                          : "border-indigo-200 bg-indigo-50 text-indigo-700"
+                      )}
+                    >
+                      <HiOutlineSparkles className="h-4 w-4" />
+                      {lista?.status === "inactivo" ? "Lista inactiva" : "Lista activa y editable"}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void openManageCreators()}
+                      disabled={pageLoading || manageBusy || !lista}
+                      className="inline-flex items-center justify-center gap-1 rounded-lg border border-indigo-100 bg-indigo-50/80 px-3 py-2 text-sm font-semibold text-indigo-800 hover:bg-indigo-100 disabled:opacity-50"
+                    >
+                      <HiOutlinePlusCircle className="h-4 w-4" />
+                      Agregar creadores
+                    </button>
+                  </div>
                 </div>
-                <div className="flex sm:col-span-2 lg:col-span-1 lg:justify-end">
-                  <button
-                    type="submit"
-                    disabled={pageLoading || savingMeta}
-                    className="rounded-xl bg-purple px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-purple/90 disabled:opacity-50"
-                  >
-                    {savingMeta ? "Guardando…" : "Guardar cambios"}
-                  </button>
+
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                  <div className="rounded-xl border border-slate-200 bg-slate-50/70 px-4 py-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Miembros totales
+                    </p>
+                    <p className="mt-1 inline-flex items-center gap-2 text-xl font-bold text-slate-900">
+                      <HiOutlineUsers className="h-5 w-5 text-purple" />
+                      {recipientsRaw.length}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50/70 px-4 py-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Creadores activos
+                    </p>
+                    <p className="mt-1 inline-flex items-center gap-2 text-xl font-bold text-slate-900">
+                      <HiOutlineCheckBadge className="h-5 w-5 text-emerald-600" />
+                      {activeRecipientsCount}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50/70 px-4 py-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Plataformas detectadas
+                    </p>
+                    <p className="mt-1 inline-flex items-center gap-2 text-xl font-bold text-slate-900">
+                      <HiOutlineCircleStack className="h-5 w-5 text-indigo-600" />
+                      {platformCount}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50/70 px-4 py-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Status</p>
+                    <div className="mt-1.5 min-w-0">
+                      <Select<ListOption, false, GroupBase<ListOption>>
+                        instanceId="lista-detalle-summary-status"
+                        inputId="lista-detalle-summary-status-input"
+                        classNamePrefix="react-select-lista-summary-status"
+                        styles={selectListStyles}
+                        options={LISTA_STATUS_OPTIONS}
+                        value={formListaStatus}
+                        onChange={(opt: SingleValue<ListOption>) => {
+                          const next = opt ?? LISTA_STATUS_OPTIONS[0];
+                          const st = next.value as "activo" | "inactivo";
+                          setFormListaStatus(next);
+                          if (lista && st !== lista.status) {
+                            void persistListaMeta({ status: st });
+                          }
+                        }}
+                        isDisabled={pageLoading || savingMeta || !lista}
+                        menuPosition="fixed"
+                        menuPortalTarget={typeof document !== "undefined" ? document.body : null}
+                      />
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50/70 px-4 py-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Fecha creación
+                    </p>
+                    <p className="mt-1 inline-flex items-center gap-2 text-sm font-semibold text-slate-800">
+                      <HiOutlineCalendarDays className="h-5 w-5 text-slate-500" />
+                      {createdAtLabel}
+                    </p>
+                  </div>
                 </div>
-              </form>
+
+                <div className="flex w-full items-start gap-2 rounded-xl border border-sky-100 bg-sky-50/80 px-4 py-3 text-sm text-sky-900">
+                  <HiOutlineInformationCircle className="mt-0.5 h-5 w-5 shrink-0 text-sky-600" />
+                  <p className="text-xs leading-relaxed text-sky-900/90">
+                    Consejo: aplica filtros antes de hacer limpieza masiva para evitar quitar creadores
+                    por error.
+                  </p>
+                </div>
+              </div>
             </div>
 
             {/* Filtros (misma lógica visual que Creadores; filtrado en cliente) */}
@@ -1082,7 +1399,7 @@ export function ListaDetallePage() {
               )}
             </div>
 
-            {/* Tabla (misma estructura que Creadores, con selección) */}
+            {/* Tabla */}
             <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm shadow-slate-200/40">
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[960px] border-collapse text-left text-sm">
@@ -1210,6 +1527,166 @@ export function ListaDetallePage() {
                 </table>
               </div>
             </div>
+
+            {manageOpen && lista && (
+              <div
+                className="fixed inset-0 z-[210] flex items-center justify-center p-4"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="manage-creators-modal-title"
+              >
+                <button
+                  type="button"
+                  className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px]"
+                  aria-label="Cerrar"
+                  onClick={closeManageModal}
+                />
+                <div
+                  className="relative z-10 w-full max-w-3xl rounded-2xl border border-slate-200 bg-white p-6 shadow-xl shadow-slate-300/50"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <h2 id="manage-creators-modal-title" className="text-lg font-bold text-slate-900">
+                    Agregar creadores a: {lista.nombre}
+                  </h2>
+                  <p className="mt-1 text-sm text-slate-600">
+                    Puedes asociar creadores existentes con selección múltiple o importar CSV/XLSX
+                    para crear/actualizar y vincular en una sola acción.
+                  </p>
+
+                  <div className="mt-5">
+                    <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1">
+                      <button
+                        type="button"
+                        onClick={() => setManageMode("existing")}
+                        disabled={manageBusy}
+                        className={cn(
+                          "rounded-lg px-3 py-1.5 text-sm font-semibold transition",
+                          manageMode === "existing"
+                            ? "bg-white text-indigo-700 shadow-sm"
+                            : "text-slate-600 hover:text-slate-800"
+                        )}
+                      >
+                        Creadores preexistentes
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setManageMode("import")}
+                        disabled={manageBusy}
+                        className={cn(
+                          "rounded-lg px-3 py-1.5 text-sm font-semibold transition",
+                          manageMode === "import"
+                            ? "bg-white text-indigo-700 shadow-sm"
+                            : "text-slate-600 hover:text-slate-800"
+                        )}
+                      >
+                        Importar CSV/XLSX
+                      </button>
+                    </div>
+
+                    {manageMode === "existing" ? (
+                      <section className="mt-4 rounded-xl border border-slate-200 p-4">
+                        <h3 className="text-sm font-semibold text-slate-800">Creadores preexistentes</h3>
+                        <p className="mt-1 text-xs text-slate-500">
+                          Selección múltiple con React Select. No duplica asociaciones si ya estaban en la lista.
+                        </p>
+                        <div className="mt-3">
+                          <Select<CreatorOption, true, GroupBase<CreatorOption>>
+                            instanceId="lista-detalle-add-existing-creators"
+                            inputId="lista-detalle-add-existing-creators-input"
+                            isMulti
+                            isClearable
+                            closeMenuOnSelect={false}
+                            isLoading={creatorSelectLoading}
+                            isDisabled={creatorSelectLoading || manageBusy}
+                            options={creatorOptions}
+                            value={selectedCreatorOptions}
+                            onChange={(opts: MultiValue<CreatorOption>) => setSelectedCreatorOptions(opts)}
+                            placeholder="Busca y selecciona creadores..."
+                            menuPosition="fixed"
+                            menuPortalTarget={typeof document !== "undefined" ? document.body : null}
+                            noOptionsMessage={() =>
+                              creatorSelectLoading ? "Cargando creadores..." : "Sin resultados"
+                            }
+                          />
+                        </div>
+                        <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+                          <p className="text-xs text-slate-500">
+                            Seleccionados: <strong>{selectedCreatorOptions.length}</strong>
+                          </p>
+                          <button
+                            type="button"
+                            disabled={manageBusy || selectedCreatorOptions.length === 0}
+                            onClick={() => void submitExistingCreators()}
+                            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+                          >
+                            Agregar seleccionados
+                          </button>
+                        </div>
+                      </section>
+                    ) : (
+                      <section className="mt-4 rounded-xl border border-slate-200 p-4">
+                        <h3 className="text-sm font-semibold text-slate-800">Importar CSV/XLSX</h3>
+                        <p className="mt-1 text-xs text-slate-500">
+                          Si existe: actualiza datos y lo vincula. Si no existe: lo crea y lo vincula.
+                        </p>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={downloadCreadoresPlantillaCsv}
+                            className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                          >
+                            Plantilla CSV
+                          </button>
+                          <button
+                            type="button"
+                            onClick={downloadCreadoresPlantillaXlsx}
+                            className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                          >
+                            Plantilla XLSX
+                          </button>
+                        </div>
+                        <input
+                          type="file"
+                          accept=".csv,.xlsx,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
+                          className="mt-3 w-full text-sm text-slate-700 file:mr-3 file:rounded-lg file:border-0 file:bg-indigo-50 file:px-3 file:py-2 file:text-sm file:font-medium file:text-indigo-700 hover:file:bg-indigo-100"
+                          onChange={(e) => setBulkFile(e.target.files?.[0] ?? null)}
+                          disabled={manageBusy}
+                        />
+                        {bulkFile ? (
+                          <p className="mt-2 text-xs text-slate-600">
+                            Archivo: <strong>{bulkFile.name}</strong>
+                          </p>
+                        ) : null}
+                        <div className="mt-4 flex justify-end">
+                          <button
+                            type="button"
+                            disabled={manageBusy || !bulkFile}
+                            onClick={() => void submitFileToList()}
+                            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+                          >
+                            Importar y vincular
+                          </button>
+                        </div>
+                      </section>
+                    )}
+                  </div>
+
+                  <div className="mt-6 flex justify-between gap-2 border-t border-slate-100 pt-4">
+                    <p className="text-xs text-slate-500">
+                      Tip: usa la importación para altas/actualizaciones masivas.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={closeManageModal}
+                      disabled={manageBusy}
+                      className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                    >
+                      Cerrar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </>
         )}
       </div>

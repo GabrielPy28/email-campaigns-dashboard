@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import Select, { type GroupBase, type SingleValue } from "react-select";
+import Select, {
+  type GroupBase,
+  type MultiValue,
+  type SingleValue,
+  type StylesConfig,
+} from "react-select";
 import Swal from "sweetalert2";
 import {
   HiOutlineArrowDownTray,
@@ -17,17 +22,99 @@ import {
   createLista,
   deleteLista,
   downloadListaRecipientsExcel,
+  fetchCreators,
   fetchListas,
+  linkManyCreatorsToLista,
+  uploadListaRecipientsFile,
   updateLista,
+  type CreatorRead,
   type ListaListFilters,
   type ListaRead,
 } from "../../lib/api";
 import { selectListStyles, type ListOption } from "../../components/ui/select-list";
+import {
+  downloadCreadoresPlantillaCsv,
+  downloadCreadoresPlantillaXlsx,
+} from "../../lib/creadoresBulkLayout";
 
 const LISTA_STATUS_FILTER: ListOption[] = [
   { value: "activo", label: "Activa" },
   { value: "inactivo", label: "Inactiva" },
 ];
+
+type CreatorOption = ListOption & {
+  email: string;
+  fullName: string;
+};
+
+const creatorMultiSelectStyles: StylesConfig<CreatorOption, true, GroupBase<CreatorOption>> = {
+  control: (base: Record<string, unknown>, state: { isFocused?: boolean }) => ({
+    ...base,
+    minHeight: 46,
+    borderRadius: 12,
+    backgroundColor: "#ffffff",
+    borderColor: state.isFocused ? "rgb(167 139 250)" : "rgb(203 213 225)",
+    boxShadow: state.isFocused ? "0 0 0 2px rgba(139, 92, 246, 0.18)" : "none",
+    "&:hover": {
+      borderColor: state.isFocused ? "rgb(167 139 250)" : "rgb(148 163 184)",
+    },
+  }),
+  valueContainer: (base: Record<string, unknown>) => ({
+    ...base,
+    padding: "6px 10px",
+    gap: 6,
+    flexWrap: "wrap",
+  }),
+  multiValue: (base: Record<string, unknown>) => ({
+    ...base,
+    borderRadius: 10,
+    backgroundColor: "rgb(237 233 254)",
+    border: "1px solid rgb(196 181 253)",
+  }),
+  multiValueLabel: (base: Record<string, unknown>) => ({
+    ...base,
+    color: "rgb(67 56 202)",
+    fontWeight: 600,
+    fontSize: "0.8125rem",
+  }),
+  multiValueRemove: (base: Record<string, unknown>) => ({
+    ...base,
+    color: "rgb(99 102 241)",
+    ":hover": { backgroundColor: "rgb(221 214 254)", color: "rgb(79 70 229)" },
+  }),
+  option: (base: Record<string, unknown>, state: { isSelected?: boolean; isFocused?: boolean }) => ({
+    ...base,
+    cursor: "pointer",
+    backgroundColor: state.isSelected
+      ? "rgb(237 233 254)"
+      : state.isFocused
+        ? "rgb(245 243 255)"
+        : "transparent",
+    color: state.isSelected ? "rgb(76 29 149)" : "rgb(15 23 42)",
+    fontSize: "0.875rem",
+  }),
+  placeholder: (base) => ({ ...base, color: "rgb(148 163 184)" }),
+  input: (base) => ({ ...base, color: "rgb(15 23 42)" }),
+  menu: (base) => ({
+    ...base,
+    borderRadius: 10,
+    border: "1px solid rgb(226 232 240)",
+    overflow: "hidden",
+    boxShadow: "0 10px 20px -10px rgb(15 23 42 / 0.25)",
+  }),
+  indicatorSeparator: () => ({ display: "none" }),
+  menuPortal: (base) => ({ ...base, zIndex: 9999 }),
+};
+
+function creatorToOption(c: CreatorRead): CreatorOption {
+  const fullName = c.full_name?.trim() || [c.first_name, c.last_name].filter(Boolean).join(" ").trim() || c.email;
+  return {
+    value: c.id,
+    label: `${fullName} · ${c.email}`,
+    email: c.email,
+    fullName,
+  };
+}
 
 function listaStatusLabel(status: string): string {
   return status === "inactivo" ? "Inactiva" : "Activa";
@@ -47,6 +134,14 @@ export function ListasPage() {
   const [formStatus, setFormStatus] = useState<ListOption | null>(LISTA_STATUS_FILTER[0]);
   const [saving, setSaving] = useState(false);
   const [rowBusyId, setRowBusyId] = useState<string | null>(null);
+  const [manageOpen, setManageOpen] = useState(false);
+  const [manageList, setManageList] = useState<ListaRead | null>(null);
+  const [creatorOptions, setCreatorOptions] = useState<CreatorOption[]>([]);
+  const [creatorSelectLoading, setCreatorSelectLoading] = useState(false);
+  const [selectedCreatorOptions, setSelectedCreatorOptions] = useState<readonly CreatorOption[]>([]);
+  const [bulkFile, setBulkFile] = useState<File | null>(null);
+  const [manageBusy, setManageBusy] = useState(false);
+  const [manageMode, setManageMode] = useState<"existing" | "import">("existing");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -155,6 +250,137 @@ export function ListasPage() {
       });
     } finally {
       setRowBusyId(null);
+    }
+  };
+
+  const openManageCreators = async (l: ListaRead) => {
+    setManageList(l);
+    setManageOpen(true);
+    setManageMode("existing");
+    setSelectedCreatorOptions([]);
+    setBulkFile(null);
+    setCreatorSelectLoading(true);
+    try {
+      const creators = await fetchCreators({ status: "activo", limit: 500 });
+      setCreatorOptions(creators.map(creatorToOption));
+    } catch (err) {
+      void Swal.fire({
+        icon: "error",
+        title: "No se pudieron cargar creadores",
+        text: err instanceof Error ? err.message : "Error cargando creadores.",
+      });
+      setCreatorOptions([]);
+    } finally {
+      setCreatorSelectLoading(false);
+    }
+  };
+
+  const bumpListCounter = (listId: string, delta: number) => {
+    if (delta <= 0) return;
+    setListas((prev) =>
+      prev.map((x) =>
+        x.id === listId
+          ? { ...x, num_creators: Math.max(0, (x.num_creators ?? 0) + delta) }
+          : x
+      )
+    );
+  };
+
+  const closeManageModal = () => {
+    if (manageBusy) return;
+    setManageOpen(false);
+    setManageList(null);
+    setManageMode("existing");
+    setSelectedCreatorOptions([]);
+    setBulkFile(null);
+  };
+
+  const submitExistingCreators = async () => {
+    if (!manageList) return;
+    const ids = selectedCreatorOptions.map((o) => o.value);
+    if (ids.length === 0) {
+      void Swal.fire({
+        icon: "warning",
+        title: "Selecciona creadores",
+        text: "Elige al menos un creador para agregar a la lista.",
+      });
+      return;
+    }
+    setManageBusy(true);
+    try {
+      const res = await linkManyCreatorsToLista(manageList.id, ids);
+      bumpListCounter(manageList.id, res.linked_new);
+      await Swal.fire({
+        icon: "success",
+        title: "Creadores procesados",
+        html: `
+          <div style="text-align:left;font-size:13px;line-height:1.5">
+            <div><strong>Nuevos en lista:</strong> ${res.linked_new}</div>
+            <div><strong>Contador visual:</strong> +${res.linked_new} miembros</div>
+            <div><strong>Ya estaban:</strong> ${res.already_in_list}</div>
+            <div><strong>No encontrados:</strong> ${res.not_found.length}</div>
+          </div>
+        `,
+        confirmButtonColor: "#7c3aed",
+      });
+      setSelectedCreatorOptions([]);
+    } catch (err) {
+      void Swal.fire({
+        icon: "error",
+        title: "Error al asociar creadores",
+        text: err instanceof Error ? err.message : "No se pudieron asociar los creadores.",
+      });
+    } finally {
+      setManageBusy(false);
+    }
+  };
+
+  const submitFileToList = async () => {
+    if (!manageList) return;
+    if (!bulkFile) {
+      void Swal.fire({
+        icon: "warning",
+        title: "Archivo requerido",
+        text: "Selecciona un archivo CSV o XLSX para importar.",
+      });
+      return;
+    }
+    setManageBusy(true);
+    try {
+      const res = await uploadListaRecipientsFile(manageList.id, bulkFile);
+      bumpListCounter(manageList.id, res.linked_new);
+      const errorLines =
+        res.errors.length > 0
+          ? `<div style="margin-top:8px;max-height:140px;overflow:auto;text-align:left;font-size:12px;color:#b91c1c">${res.errors
+              .slice(0, 10)
+              .map((e) => `• ${e}`)
+              .join("<br/>")}</div>`
+          : "";
+      await Swal.fire({
+        icon: res.errors.length > 0 ? "warning" : "success",
+        title: "Importación completada",
+        html: `
+          <div style="text-align:left;font-size:13px;line-height:1.5">
+            <div><strong>Creadores nuevos:</strong> ${res.creators_created}</div>
+            <div><strong>Creadores actualizados:</strong> ${res.creators_updated}</div>
+            <div><strong>Agregados a lista:</strong> ${res.linked_new}</div>
+            <div><strong>Contador visual:</strong> +${res.linked_new} miembros</div>
+            <div><strong>Ya estaban en lista:</strong> ${res.already_in_list}</div>
+            <div><strong>Filas sin email:</strong> ${res.skipped_empty_email}</div>
+          </div>
+          ${errorLines}
+        `,
+        confirmButtonColor: "#7c3aed",
+      });
+      setBulkFile(null);
+    } catch (err) {
+      void Swal.fire({
+        icon: "error",
+        title: "Error al importar",
+        text: err instanceof Error ? err.message : "No se pudo importar el archivo.",
+      });
+    } finally {
+      setManageBusy(false);
     }
   };
 
@@ -289,7 +515,7 @@ export function ListasPage() {
           )}
         </div>
 
-        {/* Acción principal: entre filtros y tabla */}
+        {/* Crear lista */}
         <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
           <button
             type="button"
@@ -316,22 +542,22 @@ export function ListasPage() {
         {/* Tabla */}
         <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm shadow-slate-200/40">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] border-collapse text-left text-sm">
+            <table className="w-full min-w-[720px] table-fixed border-collapse text-left text-sm">
               <thead>
                 <tr className="border-b border-slate-100 bg-gradient-to-r from-slate-50/90 to-indigo-50/40">
-                  <th className="px-3 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  <th className="w-[10%] px-3 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
                     ID
                   </th>
-                  <th className="min-w-[200px] px-3 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  <th className="w-[35%] px-3 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
                     Nombre
                   </th>
-                  <th className="px-3 py-3.5 text-center text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  <th className="w-[10%] px-3 py-3.5 text-center text-xs font-semibold uppercase tracking-wide text-slate-500">
                     N.º creadores
                   </th>
-                  <th className="px-3 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  <th className="w-[10%] px-3 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
                     Status
                   </th>
-                  <th className="w-[200px] px-3 py-3.5 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  <th className="w-[35%] px-3 py-3.5 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
                     Acciones
                   </th>
                 </tr>
@@ -386,7 +612,7 @@ export function ListasPage() {
                         >
                           <HiOutlinePencilSquare className="h-4 w-4" />
                           Editar
-                        </Link>
+                        </Link>                        
                         <button
                           type="button"
                           disabled={rowBusyId === l.id}
@@ -394,7 +620,7 @@ export function ListasPage() {
                           className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-semibold text-slate-700 hover:border-emerald-300 hover:text-emerald-800 disabled:opacity-50"
                         >
                           <HiOutlineArrowDownTray className="h-4 w-4" />
-                          Excel
+                          Descargar
                         </button>
                         <button
                           type="button"
@@ -404,6 +630,15 @@ export function ListasPage() {
                         >
                           <HiOutlineTrash className="h-4 w-4" />
                           Eliminar
+                        </button>
+                        <button
+                          type="button"
+                          disabled={rowBusyId === l.id}
+                          onClick={() => void openManageCreators(l)}
+                          className="inline-flex items-center gap-1 rounded-lg border border-indigo-100 bg-indigo-50/80 px-2 py-1.5 text-xs font-semibold text-indigo-800 hover:bg-indigo-100 disabled:opacity-50"
+                        >
+                          <HiOutlinePlusCircle className="h-4 w-4" />
+                          Agregar creadores
                         </button>
                       </div>
                     </td>
@@ -484,6 +719,166 @@ export function ListasPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {manageOpen && manageList && (
+        <div
+          className="fixed inset-0 z-[210] flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="manage-creators-modal-title"
+        >
+          <button
+            type="button"
+            className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px]"
+            aria-label="Cerrar"
+            onClick={closeManageModal}
+          />
+          <div
+            className="relative z-10 w-full max-w-3xl rounded-2xl border border-slate-200 bg-white p-6 shadow-xl shadow-slate-300/50"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="manage-creators-modal-title" className="text-lg font-bold text-slate-900">
+              Agregar creadores a: {manageList.nombre}
+            </h2>
+            <p className="mt-1 text-sm text-slate-600">
+              Puedes asociar creadores existentes con selección múltiple o importar CSV/XLSX para crear/actualizar y vincular en una sola acción.
+            </p>
+
+            <div className="mt-5">
+              <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1">
+                <button
+                  type="button"
+                  onClick={() => setManageMode("existing")}
+                  disabled={manageBusy}
+                  className={cn(
+                    "rounded-lg px-3 py-1.5 text-sm font-semibold transition",
+                    manageMode === "existing"
+                      ? "bg-white text-indigo-700 shadow-sm"
+                      : "text-slate-600 hover:text-slate-800"
+                  )}
+                >
+                  Creadores preexistentes
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setManageMode("import")}
+                  disabled={manageBusy}
+                  className={cn(
+                    "rounded-lg px-3 py-1.5 text-sm font-semibold transition",
+                    manageMode === "import"
+                      ? "bg-white text-indigo-700 shadow-sm"
+                      : "text-slate-600 hover:text-slate-800"
+                  )}
+                >
+                  Importar CSV/XLSX
+                </button>
+              </div>
+
+              {manageMode === "existing" ? (
+                <section className="mt-4 rounded-xl border border-slate-200 p-4">
+                  <h3 className="text-sm font-semibold text-slate-800">Creadores preexistentes</h3>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Selección múltiple con React Select. No duplica asociaciones si ya estaban en la lista.
+                  </p>
+                  <div className="mt-3">
+                    <Select<CreatorOption, true, GroupBase<CreatorOption>>
+                      instanceId="listas-add-existing-creators"
+                      inputId="listas-add-existing-creators-input"
+                      styles={creatorMultiSelectStyles}
+                      isMulti
+                      isClearable
+                      closeMenuOnSelect={false}
+                      isLoading={creatorSelectLoading}
+                      isDisabled={creatorSelectLoading || manageBusy}
+                      options={creatorOptions}
+                      value={selectedCreatorOptions}
+                      onChange={(opts: MultiValue<CreatorOption>) => setSelectedCreatorOptions(opts)}
+                      placeholder="Busca y selecciona creadores..."
+                      menuPosition="fixed"
+                      menuPortalTarget={typeof document !== "undefined" ? document.body : null}
+                      noOptionsMessage={() =>
+                        creatorSelectLoading ? "Cargando creadores..." : "Sin resultados"
+                      }
+                    />
+                  </div>
+                  <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-xs text-slate-500">
+                      Seleccionados: <strong>{selectedCreatorOptions.length}</strong>
+                    </p>
+                    <button
+                      type="button"
+                      disabled={manageBusy || selectedCreatorOptions.length === 0}
+                      onClick={() => void submitExistingCreators()}
+                      className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+                    >
+                      Agregar seleccionados
+                    </button>
+                  </div>
+                </section>
+              ) : (
+                <section className="mt-4 rounded-xl border border-slate-200 p-4">
+                  <h3 className="text-sm font-semibold text-slate-800">Importar CSV/XLSX</h3>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Si existe: actualiza datos y lo vincula. Si no existe: lo crea y lo vincula.
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={downloadCreadoresPlantillaCsv}
+                      className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                    >
+                      Plantilla CSV
+                    </button>
+                    <button
+                      type="button"
+                      onClick={downloadCreadoresPlantillaXlsx}
+                      className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                    >
+                      Plantilla XLSX
+                    </button>
+                  </div>
+                  <input
+                    type="file"
+                    accept=".csv,.xlsx,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
+                    className="mt-3 w-full text-sm text-slate-700 file:mr-3 file:rounded-lg file:border-0 file:bg-indigo-50 file:px-3 file:py-2 file:text-sm file:font-medium file:text-indigo-700 hover:file:bg-indigo-100"
+                    onChange={(e) => setBulkFile(e.target.files?.[0] ?? null)}
+                    disabled={manageBusy}
+                  />
+                  {bulkFile ? (
+                    <p className="mt-2 text-xs text-slate-600">
+                      Archivo: <strong>{bulkFile.name}</strong>
+                    </p>
+                  ) : null}
+                  <div className="mt-4 flex justify-end">
+                    <button
+                      type="button"
+                      disabled={manageBusy || !bulkFile}
+                      onClick={() => void submitFileToList()}
+                      className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+                    >
+                      Importar y vincular
+                    </button>
+                  </div>
+                </section>
+              )}
+            </div>
+
+            <div className="mt-6 flex justify-between gap-2 border-t border-slate-100 pt-4">
+              <p className="text-xs text-slate-500">
+                Tip: usa la importación para altas/actualizaciones masivas.
+              </p>
+              <button
+                type="button"
+                onClick={closeManageModal}
+                disabled={manageBusy}
+                className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                Cerrar
+              </button>
+            </div>
           </div>
         </div>
       )}

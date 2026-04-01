@@ -20,6 +20,7 @@ import {
   HiOutlinePencilSquare,
   HiOutlineTrash,
   HiOutlineArrowDownTray,
+  HiOutlineInformationCircle,
 } from "react-icons/hi2";
 
 const PER_PAGE = 50;
@@ -183,26 +184,60 @@ export function PlantillasPage() {
   return (
     <div className="p-6 sm:p-8 min-h-full bg-gradient-to-b from-slate-50 to-indigo-50/20">
       <div className="flex flex-col gap-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-800">
-              <span className="text-violet-600">Plantillas</span>
-            </h1>
-            <p className="mt-1 text-sm text-slate-500">
-              Listado de plantillas de correo. Selecciona una para ver la vista previa.
-            </p>
+        <div className="relative overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm shadow-slate-200/50 sm:p-8">
+          <div
+            className="pointer-events-none absolute -right-20 -top-20 h-56 w-56 rounded-full bg-gradient-to-br from-violet-500/12 via-transparent to-indigo-500/10 blur-2xl"
+            aria-hidden
+          />
+          <div className="relative flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-600">
+                Campañas y contenido
+              </p>
+              <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+                Plantillas de correo
+              </h1>
+              <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-600">
+                Crea y mantén plantillas HTML reutilizables para tus envíos. Desde aquí puedes buscar
+                por nombre o ID, abrir una tarjeta para ver la vista previa, descargar el HTML,
+                editarla o eliminarla de forma segura con confirmación.
+              </p>
+              <div className="mt-4">
+                <Link to="/dashboard/plantillas/nueva">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="default"
+                    className="gap-2 border border-emerald-200 bg-white text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800"
+                  >
+                    <HiOutlinePlus className="h-4 w-4" />
+                    Nueva plantilla
+                  </Button>
+                </Link>
+              </div>
+            </div>
+            <div className="flex shrink-0 justify-end lg:max-w-md">
+              <div className="flex w-full items-start gap-2 rounded-xl border border-sky-100 bg-sky-50/80 px-4 py-3 text-sm text-sky-900">
+                <HiOutlineInformationCircle className="mt-0.5 h-5 w-5 shrink-0 text-sky-600" />
+                <div className="space-y-1 text-sky-900/90">
+                  <p className="font-semibold text-sky-950">Guía rápida</p>
+                  <ul className="list-inside list-disc space-y-0.5 text-xs leading-relaxed text-sky-900/85">
+                    <li>
+                      <strong>Selecciona</strong> una fila para ver el detalle y la vista previa a la
+                      derecha.
+                    </li>
+                    <li>
+                      Usa <strong>Descargar</strong> para guardar el HTML y revisarlo fuera del
+                      panel.
+                    </li>
+                    <li>
+                      Para redactar desde cero o duplicar flujos, entra en <strong>Nueva plantilla</strong>.
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </div>
           </div>
-          <Link to="/dashboard/plantillas/nueva">
-            <Button
-              type="button"
-              variant="ghost"
-              size="default"
-              className="gap-2 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 border border-emerald-200 bg-white"
-            >
-              <HiOutlinePlus className="h-4 w-4" />
-              Nueva plantilla
-            </Button>
-          </Link>
         </div>
 
         {/* Accordion: Filtros */}

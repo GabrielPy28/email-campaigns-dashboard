@@ -14,6 +14,8 @@ from app.creators import creators_router
 from app.creators_test import creators_test_router
 from app.lists_test import lists_test_router
 from app.qr_codes import qr_codes_router, qr_public_router
+from app.segmentations import segmentations_router
+from app.unsubscribe import unsubscribe_public_router
 from app.logs.request_logger import RequestLoggingMiddleware
 from app.db.migrate import bootstrap_schema
 
@@ -34,9 +36,11 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-Total-Count"],
 )
 
 
+app.include_router(unsubscribe_public_router)
 app.include_router(auth_router)
 app.include_router(templates_router)
 app.include_router(senders_router)
@@ -50,6 +54,7 @@ app.include_router(lists_test_router)
 app.include_router(creators_test_router)
 app.include_router(qr_codes_router)
 app.include_router(qr_public_router)
+app.include_router(segmentations_router)
 
 
 @app.on_event("startup")

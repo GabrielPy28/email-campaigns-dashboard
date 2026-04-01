@@ -9,6 +9,8 @@ import { NuevaPlantillaPage } from "./dashboard/NuevaPlantillaPage";
 import { EditarPlantillaPage } from "./dashboard/EditarPlantillaPage";
 import { SendersPage } from "./dashboard/SendersPage";
 import { ListasPage } from "./dashboard/ListasPage";
+import { SegmentacionesPage } from "./dashboard/SegmentacionesPage";
+import { SegmentacionDetallePage } from "./dashboard/SegmentacionDetallePage";
 import { ListaDetallePage } from "./dashboard/ListaDetallePage";
 import { CreadoresPage } from "./dashboard/CreadoresPage";
 import { PruebasPage } from "./dashboard/PruebasPage";
@@ -19,10 +21,15 @@ import { ReportesCampanasPage } from "./dashboard/reportes/ReportesCampanasPage"
 import { ReportesSendersPage } from "./dashboard/reportes/ReportesSendersPage";
 import { ReportesPlantillasPage } from "./dashboard/reportes/ReportesPlantillasPage";
 import { ReportesRecipientesPage } from "./dashboard/reportes/ReportesRecipientesPage";
+import { BajaCreadorPage } from "./BajaCreadorPage";
+import { DocumentacionLayout } from "./dashboard/documentacion/DocumentacionLayout";
+import { DocumentacionIndexPage } from "./dashboard/documentacion/DocumentacionIndexPage";
+import { DocumentacionSectionPage } from "./dashboard/documentacion/DocumentacionSectionPage";
 
 export function App() {
   return (
     <Routes>
+      <Route path="/baja-creador" element={<BajaCreadorPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/" element={<RootRedirect />} />
       <Route path="/dashboard" element={<DashboardLayout />}>
@@ -34,16 +41,22 @@ export function App() {
         <Route path="plantillas/editar/:id" element={<EditarPlantillaPage />} />
         <Route path="senders" element={<SendersPage />} />
         <Route path="listas" element={<ListasPage />} />
+        <Route path="segmentaciones" element={<SegmentacionesPage />} />
+        <Route path="segmentaciones/:segmentationId" element={<SegmentacionDetallePage />} />
         <Route path="listas/:listId" element={<ListaDetallePage />} />
         <Route path="creadores" element={<CreadoresPage />} />
         <Route path="pruebas" element={<PruebasPage />} />
-        {/*<Route path="codigos-qr" element={<QrCodesPage />} />*/}
+        <Route path="codigos-qr" element={<QrCodesPage />} />
         <Route path="reportes" element={<ReportesLayout />}>
           <Route index element={<ReportesIndexPage />} />
           <Route path="campanas" element={<ReportesCampanasPage />} />
           <Route path="senders" element={<ReportesSendersPage />} />
           <Route path="plantillas" element={<ReportesPlantillasPage />} />
           <Route path="recipientes" element={<ReportesRecipientesPage />} />
+        </Route>
+        <Route path="documentacion" element={<DocumentacionLayout />}>
+          <Route index element={<DocumentacionIndexPage />} />
+          <Route path=":slug" element={<DocumentacionSectionPage />} />
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

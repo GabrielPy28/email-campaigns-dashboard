@@ -22,8 +22,8 @@ import { cn } from "../../lib/utils";
 import { AvatarWithFallback } from "../../components/AvatarWithFallback";
 import { selectListStyles, type ListOption } from "../../components/ui/select-list";
 import {
-  fetchCreators,
-  fetchCreatorsTest,
+  fetchCreatorsPage,
+  fetchCreatorsTestPage,
   fetchCreator,
   fetchCreatorTest,
   fetchPlatforms,
@@ -53,6 +53,7 @@ import {
 import Swal from "sweetalert2";
 import {
   HiOutlineChevronDown,
+  HiOutlineChevronLeft,
   HiOutlineChevronRight,
   HiOutlineArrowDownTray,
   HiOutlineUserPlus,
@@ -927,6 +928,9 @@ function PlatformBadge({ name }: { name: string }) {
 
 export type CreadoresPageMode = "production" | "pruebas";
 
+const CREATOR_PAGE_SIZES = [50, 100, 1000] as const;
+type CreatorPageSize = (typeof CREATOR_PAGE_SIZES)[number];
+
 export function CreadoresPage({ mode = "production" }: { mode?: CreadoresPageMode } = {}) {
   const isPruebas = mode === "pruebas";
   const selPrefix = isPruebas ? "pruebas-" : "";
@@ -942,10 +946,11 @@ export function CreadoresPage({ mode = "production" }: { mode?: CreadoresPageMod
   const [draftMaxCamp, setDraftMaxCamp] = useState("");
   /** Filtro: creadores con cuenta en todas las plataformas seleccionadas (tabla `platforms`). */
   const [draftFilterPlatforms, setDraftFilterPlatforms] = useState<readonly ListOption[]>([]);
-  const [appliedFilters, setAppliedFilters] = useState<CreatorListFilters>({
-    skip: 0,
-    limit: 500,
-  });
+  /** Filtros de listado (sin paginación; `skip`/`limit` se añaden al cargar). */
+  const [listFilters, setListFilters] = useState<CreatorListFilters>({});
+  const [creatorTotal, setCreatorTotal] = useState(0);
+  const [pageIndex, setPageIndex] = useState(0);
+  const [pageSize, setPageSize] = useState<CreatorPageSize>(100);
 
   const [creatorsRaw, setCreatorsRaw] = useState<CreatorRead[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1085,25 +1090,37 @@ export function CreadoresPage({ mode = "production" }: { mode?: CreadoresPageMod
     setLoading(true);
     setLoadError(null);
     try {
-      const data = isPruebas
-        ? await fetchCreatorsTest(appliedFilters, platformsList)
-        : await fetchCreators(appliedFilters);
-      setCreatorsRaw(data);
+      const payload: CreatorListFilters = {
+        ...listFilters,
+        skip: pageIndex * pageSize,
+        limit: pageSize,
+      };
+      const { items, total } = isPruebas
+        ? await fetchCreatorsTestPage(payload)
+        : await fetchCreatorsPage(payload);
+      setCreatorsRaw(items);
+      setCreatorTotal(total);
       setSelected(new Set());
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : "Error al cargar creadores");
       setCreatorsRaw([]);
+      setCreatorTotal(0);
     } finally {
       setLoading(false);
     }
-  }, [appliedFilters, isPruebas, platformsList]);
+  }, [listFilters, pageIndex, pageSize, isPruebas]);
 
   useEffect(() => {
     void reloadCreators();
   }, [reloadCreators]);
 
+  useEffect(() => {
+    const maxPage = Math.max(0, Math.ceil(creatorTotal / pageSize) - 1);
+    setPageIndex((p) => (p > maxPage ? maxPage : p));
+  }, [creatorTotal, pageSize]);
+
   const buildFiltersFromDraft = useCallback((): CreatorListFilters => {
-    const next: CreatorListFilters = { skip: 0, limit: 500 };
+    const next: CreatorListFilters = {};
     if (draftStatus?.value) next.status = draftStatus.value;
     for (const f of FILTER_FIELDS) {
       const v = draftFields[f.key].trim();
@@ -1126,7 +1143,8 @@ export function CreadoresPage({ mode = "production" }: { mode?: CreadoresPageMod
   }, [draftStatus, draftFields, draftFilterPlatforms, draftMinCamp, draftMaxCamp]);
 
   const handleApplyFilters = () => {
-    setAppliedFilters(buildFiltersFromDraft());
+    setPageIndex(0);
+    setListFilters(buildFiltersFromDraft());
   };
 
   const handleClearFilters = () => {
@@ -1140,10 +1158,21 @@ export function CreadoresPage({ mode = "production" }: { mode?: CreadoresPageMod
     setDraftMinCamp("");
     setDraftMaxCamp("");
     setDraftFilterPlatforms([]);
-    setAppliedFilters({ skip: 0, limit: 500 });
+    setListFilters({});
+    setPageIndex(0);
+    setPageSize(100);
   };
 
   const tableRows = useMemo(() => creatorsRaw.map(creatorReadToRow), [creatorsRaw]);
+
+  const totalPages = useMemo(
+    () => Math.max(1, Math.ceil(creatorTotal / pageSize)),
+    [creatorTotal, pageSize]
+  );
+  const canGoPrev = pageIndex > 0;
+  const canGoNext = (pageIndex + 1) * pageSize < creatorTotal;
+  const rangeFrom = creatorTotal === 0 ? 0 : pageIndex * pageSize + 1;
+  const rangeTo = pageIndex * pageSize + tableRows.length;
 
   const listasFiltradasAgregar = useMemo(() => {
     const q = addToListSearch.trim().toLowerCase();
@@ -1833,7 +1862,7 @@ export function CreadoresPage({ mode = "production" }: { mode?: CreadoresPageMod
                       options={filterPlatformOptions}
                       value={[...draftFilterPlatforms]}
                       onChange={(opts: MultiValue<ListOption>) =>
-                        setDraftFilterPlatforms(opts ?? [])
+                        setDraftFilterPlatforms(opts ? Array.from(opts) : [])
                       }
                       menuPosition="fixed"
                       menuPortalTarget={
@@ -2171,15 +2200,76 @@ export function CreadoresPage({ mode = "production" }: { mode?: CreadoresPageMod
               </button>
             )}
           </div>
-          <p className="text-xs text-slate-500">
-            {loading ? (
-              "Cargando creadores…"
-            ) : (
-              <>
-                Mostrando <strong className="text-slate-700">{tableRows.length}</strong> creadores
-              </>
-            )}
-          </p>
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
+            <p className="text-xs text-slate-500">
+              {loading ? (
+                "Cargando creadores…"
+              ) : (
+                <>
+                  Mostrando{" "}
+                  <strong className="text-slate-700">
+                    {rangeFrom}-{rangeTo}
+                  </strong>{" "}
+                  de <strong className="text-slate-700">{creatorTotal}</strong> creadores
+                </>
+              )}
+            </p>
+            <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600">
+              <label className="flex items-center gap-2 font-medium">
+                <span className="text-slate-500">Por página</span>
+                <select
+                  className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm font-semibold text-slate-800 shadow-sm outline-none ring-purple/30 focus:ring-2"
+                  value={pageSize}
+                  onChange={(e) => {
+                    const v = Number(e.target.value) as CreatorPageSize;
+                    if (CREATOR_PAGE_SIZES.includes(v as CreatorPageSize)) {
+                      setPageSize(v as CreatorPageSize);
+                      setPageIndex(0);
+                    }
+                  }}
+                >
+                  {CREATOR_PAGE_SIZES.map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white p-0.5 shadow-sm">
+                <button
+                  type="button"
+                  disabled={!canGoPrev || loading}
+                  onClick={() => setPageIndex((p) => Math.max(0, p - 1))}
+                  className={cn(
+                    "inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-sm font-semibold",
+                    canGoPrev && !loading
+                      ? "text-slate-700 hover:bg-slate-100"
+                      : "cursor-not-allowed text-slate-300"
+                  )}
+                >
+                  <HiOutlineChevronLeft className="h-4 w-4" />
+                  Anterior
+                </button>
+                <span className="px-2 text-slate-500">
+                  Página {pageIndex + 1} / {totalPages}
+                </span>
+                <button
+                  type="button"
+                  disabled={!canGoNext || loading}
+                  onClick={() => setPageIndex((p) => p + 1)}
+                  className={cn(
+                    "inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-sm font-semibold",
+                    canGoNext && !loading
+                      ? "text-slate-700 hover:bg-slate-100"
+                      : "cursor-not-allowed text-slate-300"
+                  )}
+                >
+                  Siguiente
+                  <HiOutlineChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
 
         {loadError && (

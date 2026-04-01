@@ -1,27 +1,26 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import Swal from "sweetalert2";
 import {
   fetchCampaigns,
   downloadCampaignsExcel,
+  downloadCampaignDetailExport,
   fetchCampaignOpens,
   fetchCampaignClicks,
   fetchCampaignClicksByRecipient,
   fetchCampaignClicksByButton,
   fetchBrevoCompare,
   fetchCampaignDevices,
-  fetchCampaignLocations,
   deleteCampaign,
   type CampaignListRow,
   type CampaignFilters,
   type CampaignOpensReport,
   type CampaignClicksByRecipientReport,
   type CampaignDevicesReport,
-  type CampaignLocationsReport,
   type CampaignClicksByButtonReport,
   type BrevoInternalMetricsCompare,
-  type LocationCount,
+  type CampaignDetailExportSection,
 } from "../../lib/api";
 import { Button } from "../../components/ui/button";
 import { cn } from "../../lib/utils";
@@ -47,6 +46,11 @@ import {
   Line,
   ComposedChart,
   CartesianGrid,
+  RadarChart,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis,
+  Radar,
 } from "recharts";
 
 const PER_PAGE = 50;
@@ -84,7 +88,7 @@ const MESES = [
   "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
 ];
 
-/** Misma familia que las tarjetas del sidebar (blanco + borde slate suave) */
+/** Misma familia que las tarjetas del sidebar */
 const cardSurface = cn(
   "rounded-2xl border border-slate-200/90 bg-white/95 shadow-sm shadow-slate-200/70",
   "backdrop-blur-sm transition-shadow duration-300 hover:shadow-md hover:shadow-slate-300/45"
@@ -139,6 +143,34 @@ function formatSentAt(iso: string | null): string {
   return `${day} de ${month} del ${year} a las ${h}:${m}`;
 }
 
+function ChartExportPair({
+  busy,
+  disabled,
+  onExcel,
+  onCsv,
+}: {
+  busy: boolean;
+  disabled?: boolean;
+  onExcel: () => void;
+  onCsv: () => void;
+}) {
+  const c =
+    "rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 disabled:opacity-45";
+  return (
+    <div className="flex items-center gap-1 shrink-0" title="Descargar los datos de esta sección">
+      <span className="hidden sm:inline text-[10px] uppercase tracking-wide text-slate-400 mr-0.5">
+        Exportar
+      </span>
+      <button type="button" className={c} disabled={disabled || busy} onClick={onExcel}>
+        {busy ? "…" : "Excel"}
+      </button>
+      <button type="button" className={c} disabled={disabled || busy} onClick={onCsv}>
+        {busy ? "…" : "CSV"}
+      </button>
+    </div>
+  );
+}
+
 export function CampanasPage() {
   const navigate = useNavigate();
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -155,8 +187,8 @@ export function CampanasPage() {
     useState<CampaignClicksByButtonReport | null>(null);
   const [brevoCompare, setBrevoCompare] = useState<BrevoInternalMetricsCompare | null>(null);
   const [devicesReport, setDevicesReport] = useState<CampaignDevicesReport | null>(null);
-  const [locationsReport, setLocationsReport] = useState<CampaignLocationsReport | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
+  const [detailExportBusy, setDetailExportBusy] = useState(false);
   const [page, setPage] = useState(1);
 
   const loadCampaigns = useCallback(async () => {
@@ -195,7 +227,6 @@ export function CampanasPage() {
       setClicksByButtonReport(null);
       setBrevoCompare(null);
       setDevicesReport(null);
-      setLocationsReport(null);
       return;
     }
     setLoadingDetail(true);
@@ -206,16 +237,14 @@ export function CampanasPage() {
       fetchCampaignClicksByButton(selectedId),
       fetchBrevoCompare(selectedId).catch(() => null),
       fetchCampaignDevices(selectedId),
-      fetchCampaignLocations(selectedId),
     ])
-      .then(([opens, clicks, clicksByRecipient, clicksByButton, brevo, devices, locations]) => {
+      .then(([opens, clicks, clicksByRecipient, clicksByButton, brevo, devices]) => {
         setOpensReport(opens);
         setClicksTotal(clicks.total_clicks);
         setClicksByRecipientReport(clicksByRecipient);
         setClicksByButtonReport(clicksByButton ?? null);
         setBrevoCompare(brevo ?? null);
         setDevicesReport(devices);
-        setLocationsReport(locations);
       })
       .catch(() => {
         setOpensReport(null);
@@ -223,7 +252,6 @@ export function CampanasPage() {
         setClicksByButtonReport(null);
         setBrevoCompare(null);
         setDevicesReport(null);
-        setLocationsReport(null);
       })
       .finally(() => setLoadingDetail(false));
   }, [selectedId, campaigns]);
@@ -239,6 +267,25 @@ export function CampanasPage() {
       setExporting(false);
     }
   };
+
+  const runCampaignDetailExport = useCallback(
+    async (format: "xlsx" | "csv", section: CampaignDetailExportSection) => {
+      if (!selectedId) return;
+      setDetailExportBusy(true);
+      try {
+        await downloadCampaignDetailExport(selectedId, { format, section });
+      } catch (e) {
+        Swal.fire({
+          icon: "error",
+          title: "Error al exportar",
+          text: e instanceof Error ? e.message : String(e),
+        });
+      } finally {
+        setDetailExportBusy(false);
+      }
+    },
+    [selectedId]
+  );
 
   const selectedCampaign = selectedId ? campaigns.find((c) => c.id === selectedId) : null;
 
@@ -287,6 +334,79 @@ export function CampanasPage() {
   const kpiClicksHint =
     selectedCampaign != null ? `CTR listado ${selectedCampaign.click_rate_pct}%` : undefined;
 
+  /** Radar del remitente de la campana: ejes normalizados 0-100 salvo engagement (ya es %). */
+  const senderRadar = useMemo(() => {
+    if (!opensReport || !selectedCampaign) return null;
+    const totalEnvios = opensReport.total_recipients;
+    const numAperturas = opensReport.total_opens;
+    const numClics = clicksTotal;
+    const aperturasUnicas = opensReport.unique_open_recipients;
+    const clicsUnicos =
+      clicksByRecipientReport?.recipients.filter((r) => r.clicks > 0).length ?? 0;
+    const engagementPct =
+      totalEnvios > 0 ? ((aperturasUnicas + clicsUnicos) / totalEnvios) * 100 : 0;
+    const escala = Math.max(totalEnvios, numAperturas, numClics, 1);
+    const norm = (v: number) => Math.min(100, (v / escala) * 100);
+    return {
+      senderName: selectedCampaign.sender_name,
+      engagementPct,
+      aperturasUnicas,
+      clicsUnicos,
+      chartData: [
+        {
+          axis: "Aperturas",
+          score: norm(numAperturas),
+          raw: numAperturas,
+          rawSuffix: "eventos",
+          extra: String(aperturasUnicas) + " \u00fanicos",
+        },
+        {
+          axis: "Clics",
+          score: norm(numClics),
+          raw: numClics,
+          rawSuffix: "clics",
+          extra: String(clicsUnicos) + " \u00fanicos",
+        },
+        {
+          axis: "Envíos",
+          score: norm(totalEnvios),
+          raw: totalEnvios,
+          rawSuffix: "enviados",
+          extra: "Total destinatarios",
+        },
+        {
+          axis: "Engagement",
+          score: Math.min(100, engagementPct),
+          raw: engagementPct,
+          rawSuffix: "%",
+          extra: "únicos",
+        },
+      ],
+    };
+  }, [opensReport, selectedCampaign, clicksTotal, clicksByRecipientReport]);
+
+  const clicksByButtonChartData = useMemo(() => {
+    if (!clicksByButtonReport?.buttons.length) return [];
+    return clicksByButtonReport.buttons.map((b) => ({
+      name: b.button_id.length > 14 ? b.button_id.slice(0, 12) + "..." : b.button_id,
+      clicks: b.clicks,
+    }));
+  }, [clicksByButtonReport]);
+
+  const recipientPerfChartData = useMemo(() => {
+    if (!opensReport || !clicksByRecipientReport || opensReport.recipients.length === 0) return [];
+    const clicksMap = new Map(
+      clicksByRecipientReport.recipients.map((r) => [r.recipient_id, r.clicks])
+    );
+    return opensReport.recipients
+      .map((r) => ({
+        name: r.email.length > 24 ? r.email.slice(0, 22) + "..." : r.email,
+        opens: r.opens,
+        clicks: clicksMap.get(r.recipient_id) ?? 0,
+      }))
+      .slice(0, 20);
+  }, [opensReport, clicksByRecipientReport]);
+
   const chartLegendStyle = { fontSize: 11, color: DASH.muted };
 
   return (
@@ -301,7 +421,7 @@ export function CampanasPage() {
           <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
             Dashboard
           </p>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <h1 className="text-3xl font-bold tracking-tight text-slate-900">Campañas</h1>
               <p className="mt-1 max-w-2xl text-sm text-slate-600">
@@ -310,7 +430,7 @@ export function CampanasPage() {
                     Analizando{" "}
                     <span className="font-medium text-indigo-600">{selectedCampaign.name}</span>
                     {" — "}
-                    rendimiento por destinatario, dispositivo y geografía.
+                    rendimiento por destinatario, remitente y dispositivo.
                   </>
                 ) : (
                   <>
@@ -320,6 +440,34 @@ export function CampanasPage() {
                 )}
               </p>
             </div>
+            {selectedId ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
+                  Informe resultados
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="h-8 gap-1.5 rounded-lg border border-indigo-200 bg-white px-3 text-xs text-indigo-800 hover:bg-indigo-50"
+                  disabled={detailExportBusy || loadingDetail}
+                  onClick={() => runCampaignDetailExport("xlsx", "full")}
+                >
+                  <HiOutlineArrowDownTray className="h-3.5 w-3.5" />
+                  Todo · Excel
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="h-8 gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-700 hover:bg-slate-50"
+                  disabled={detailExportBusy || loadingDetail}
+                  onClick={() => runCampaignDetailExport("csv", "full")}
+                  title="Varios CSV en un ZIP"
+                >
+                  <HiOutlineArrowDownTray className="h-3.5 w-3.5" />
+                  Todo · CSV (ZIP)
+                </Button>
+              </div>
+            ) : null}
           </div>
         </motion.header>
 
@@ -376,10 +524,18 @@ export function CampanasPage() {
           transition={{ duration: 0.45, delay: 0.05 }}
           className={cn(cardSurface, "p-6")}
         >
-          <div className="mb-5 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+          <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <h2 className="text-lg font-semibold text-slate-900">Rendimiento por destinatario</h2>
             </div>
+            {selectedId ? (
+              <ChartExportPair
+                busy={detailExportBusy}
+                disabled={loadingDetail}
+                onExcel={() => runCampaignDetailExport("xlsx", "actividad_destinatarios")}
+                onCsv={() => runCampaignDetailExport("csv", "actividad_destinatarios")}
+              />
+            ) : null}
           </div>
           {!selectedId ? (
             <div className="h-[340px] flex items-center justify-center text-slate-500 text-sm rounded-xl border border-dashed border-slate-200 bg-slate-50/90">
@@ -387,21 +543,10 @@ export function CampanasPage() {
             </div>
           ) : loadingDetail ? (
             <div className="h-[340px] flex items-center justify-center text-slate-500 text-sm">Cargando…</div>
-          ) : opensReport && clicksByRecipientReport && opensReport.recipients.length > 0 ? (
+          ) : recipientPerfChartData.length > 0 ? (
             <ResponsiveContainer width="100%" height={380}>
               <ComposedChart
-                data={(() => {
-                  const clicksMap = new Map(
-                    clicksByRecipientReport.recipients.map((r) => [r.recipient_id, r.clicks])
-                  );
-                  return opensReport.recipients
-                    .map((r) => ({
-                      name: r.email.length > 24 ? `${r.email.slice(0, 22)}…` : r.email,
-                      opens: r.opens,
-                      clicks: clicksMap.get(r.recipient_id) ?? 0,
-                    }))
-                    .slice(0, 20);
-                })()}
+                data={recipientPerfChartData}
                 margin={{ top: 12, right: 28, left: 4, bottom: 64 }}
               >
                 <CartesianGrid strokeDasharray="4 8" stroke={CHART_GRID} vertical={false} />
@@ -421,7 +566,7 @@ export function CampanasPage() {
                     value,
                     name === "opens" ? "Aperturas" : "Clics",
                   ]}
-                  labelFormatter={(label) => `Destinatario: ${label}`}
+                  labelFormatter={(label) => "Destinatario: " + String(label)}
                 />
                 <Legend
                   wrapperStyle={chartLegendStyle}
@@ -453,93 +598,131 @@ export function CampanasPage() {
           )}
         </motion.section>
 
-        {/* Secundarios: geografía ancha + columna (dispositivos + Brevo + botones) */}
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:gap-5">
+        {/* Graficos Secundarios 2x2 */}
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:gap-5">
           <motion.section
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, delay: 0.1 }}
-            className={cn(cardSurface, "p-5 lg:col-span-7 min-h-[300px]")}
+            className={cn(cardSurface, "p-5 min-h-[300px]")}
           >
-            <h3 className="text-sm font-semibold text-slate-800 mb-1">Aperturas por país</h3>
-            <p className="text-[11px] text-slate-500 mb-4">Top países por eventos de pixel</p>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between mb-1">
+              <h3 className="text-sm font-semibold text-slate-800">Rendimiento del remitente</h3>
+              {selectedId ? (
+                <ChartExportPair
+                  busy={detailExportBusy}
+                  disabled={loadingDetail}
+                  onExcel={() => runCampaignDetailExport("xlsx", "remitente")}
+                  onCsv={() => runCampaignDetailExport("csv", "remitente")}
+                />
+              ) : null}
+            </div>
+            <p className="text-[11px] text-slate-500 mb-1">
+              Métricas agregadas de la campaña para{" "}
+              <span className="font-medium text-slate-700">
+                {selectedCampaign?.sender_name ?? "el remitente asignado"}
+              </span>
+              . Ejes en escala 0-100 (relativa al máximo entre envíos, aperturas y clics); el eje
+              Engagement muestra el porcentaje de la fórmula siguiente.
+            </p>
+            <p className="text-[10px] leading-relaxed text-slate-500 mb-4">
+              Engagement (%) = ((aperturas únicas + clics únicos) / total envíos) × 100
+            </p>
             {!selectedId ? (
               <div className="h-56 flex items-center justify-center text-slate-500 text-sm">
                 Selecciona una campaña
               </div>
             ) : loadingDetail ? (
               <div className="h-56 flex items-center justify-center text-slate-500 text-sm">Cargando…</div>
-            ) : locationsReport && locationsReport.locations.length > 0 ? (
-              <ResponsiveContainer width="100%" height={260}>
-                <BarChart
-                  data={locationsReport.locations.slice(0, 8)}
-                  layout="vertical"
-                  margin={{ left: 4, right: 20, top: 4, bottom: 4 }}
+            ) : senderRadar && opensReport ? (
+              <ResponsiveContainer width="100%" height={280}>
+                <RadarChart
+                  cx="50%"
+                  cy="52%"
+                  outerRadius="72%"
+                  data={senderRadar.chartData}
+                  margin={{ top: 8, right: 24, bottom: 8, left: 24 }}
                 >
-                  <CartesianGrid strokeDasharray="4 8" stroke={CHART_GRID} horizontal={false} />
-                  <XAxis
-                    type="number"
-                    domain={[0, "auto"]}
-                    tick={tickMuted}
-                    stroke={CHART_AXIS}
+                  <PolarGrid stroke={CHART_GRID} />
+                  <PolarAngleAxis
+                    dataKey="axis"
+                    tick={{ fill: DASH.muted, fontSize: 11 }}
                   />
-                  <YAxis
-                    type="category"
-                    dataKey="country_code"
-                    width={40}
-                    tick={tickMuted}
-                    stroke={CHART_AXIS}
+                  <PolarRadiusAxis
+                    angle={90}
+                    domain={[0, 100]}
+                    tick={{ fill: DASH.muted, fontSize: 10 }}
+                    tickCount={4}
+                  />
+                  <Radar
+                    name="Rendimiento"
+                    dataKey="score"
+                    stroke={DASH.primary}
+                    fill={DASH.primary}
+                    fillOpacity={0.28}
+                    strokeWidth={2}
                   />
                   <Tooltip
-                    contentStyle={TOOLTIP_STYLE}
                     content={({ active, payload }) =>
                       active && payload?.[0] ? (
                         <div
-                          className="rounded-xl px-3 py-2 text-xs text-slate-800"
+                          className="rounded-xl px-3 py-2 text-xs text-slate-800 min-w-[180px]"
                           style={{
                             background: TOOLTIP_STYLE.background,
                             border: TOOLTIP_STYLE.border,
                             boxShadow: TOOLTIP_STYLE.boxShadow,
                           }}
                         >
-                          <span>
-                            {(payload[0].payload as LocationCount).country_name ||
-                              (payload[0].payload as LocationCount).country_code}
-                          </span>
-                          <span className="font-semibold ml-2" style={{ color: DASH.primary }}>
-                            {payload[0].value}
-                          </span>
+                          {(() => {
+                            const p = payload[0].payload as (typeof senderRadar.chartData)[number];
+                            const isEngagement = p.axis === "Engagement";
+                            const rawStr = isEngagement
+                              ? Number(p.raw).toFixed(1) + "%"
+                              : String(p.raw) + " " + p.rawSuffix;
+                            return (
+                              <>
+                                <p className="font-semibold text-slate-900">{p.axis}</p>
+                                <p className="mt-1 tabular-nums">{rawStr}</p>
+                                {!isEngagement ? (
+                                  <p className="mt-0.5 text-[10px] text-slate-500">{p.extra}</p>
+                                ) : (
+                                  <p className="mt-0.5 text-[10px] text-slate-500">
+                                    {senderRadar.aperturasUnicas} aperturas un. +{" "}
+                                    {senderRadar.clicsUnicos} clics un. / {opensReport.total_recipients}{" "}
+                                    envios
+                                  </p>
+                                )}
+                              </>
+                            );
+                          })()}
                         </div>
                       ) : null
                     }
                   />
-                  <Bar
-                    dataKey="count"
-                    fill="url(#barGradGeo)"
-                    radius={[0, 8, 8, 0]}
-                    name="Aperturas"
-                  />
-                  <defs>
-                    <linearGradient id="barGradGeo" x1="0" y1="0" x2="1" y2="0">
-                      <stop offset="0%" stopColor={DASH.primary} stopOpacity={0.85} />
-                      <stop offset="100%" stopColor="#38bdf8" stopOpacity={0.9} />
-                    </linearGradient>
-                  </defs>
-                </BarChart>
+                </RadarChart>
               </ResponsiveContainer>
             ) : (
               <div className="h-56 flex items-center justify-center text-slate-500 text-sm">Sin datos</div>
             )}
           </motion.section>
 
-          <div className="flex flex-col gap-4 lg:col-span-5">
-            <motion.section
+          <motion.section
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.4, delay: 0.12 }}
-              className={cn(cardSurface, "p-5 flex-1 min-h-[280px]")}
+              className={cn(cardSurface, "p-5 min-h-[300px]")}
             >
-              <h3 className="text-sm font-semibold text-slate-800 mb-1">Dispositivos</h3>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between mb-1">
+                <h3 className="text-sm font-semibold text-slate-800">Dispositivos</h3>
+                {selectedId ? (
+                  <ChartExportPair
+                    busy={detailExportBusy}
+                    disabled={loadingDetail}
+                    onExcel={() => runCampaignDetailExport("xlsx", "dispositivos")}
+                    onCsv={() => runCampaignDetailExport("csv", "dispositivos")}
+                  />
+                ) : null}
+              </div>
               <p className="text-[11px] text-slate-500 mb-2">Distribución de aperturas / clics</p>
               {!selectedId ? (
                 <div className="h-52 flex items-center justify-center text-slate-500 text-sm">
@@ -581,15 +764,25 @@ export function CampanasPage() {
               ) : (
                 <div className="h-52 flex items-center justify-center text-slate-500 text-sm">Sin datos</div>
               )}
-            </motion.section>
+          </motion.section>
 
-            <motion.section
+          <motion.section
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.4, delay: 0.14 }}
-              className={cn(cardSurface, "p-5 min-h-[280px]")}
+              className={cn(cardSurface, "p-5 min-h-[300px]")}
             >
-              <h3 className="text-sm font-semibold text-slate-800 mb-1">Interno vs Brevo</h3>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between mb-1">
+                <h3 className="text-sm font-semibold text-slate-800">Interno vs Brevo</h3>
+                {selectedId ? (
+                  <ChartExportPair
+                    busy={detailExportBusy}
+                    disabled={loadingDetail}
+                    onExcel={() => runCampaignDetailExport("xlsx", "brevo_interno")}
+                    onCsv={() => runCampaignDetailExport("csv", "brevo_interno")}
+                  />
+                ) : null}
+              </div>
               <p className="text-[11px] text-slate-500 mb-3">Aperturas y clics (últimos 31 días Brevo)</p>
               {!selectedId ? (
                 <div className="h-48 flex items-center justify-center text-slate-500 text-sm">
@@ -618,7 +811,10 @@ export function CampanasPage() {
                       <CartesianGrid strokeDasharray="4 8" stroke={CHART_GRID} vertical={false} />
                       <XAxis dataKey="name" tick={tickMuted} stroke={CHART_AXIS} />
                       <YAxis tick={tickMuted} stroke={CHART_AXIS} domain={[0, "auto"]} />
-                      <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value, name) => [`${value}`, name]} />
+                      <Tooltip
+                        contentStyle={TOOLTIP_STYLE}
+                        formatter={(value, name) => [String(value), String(name)]}
+                      />
                       <Legend
                         wrapperStyle={chartLegendStyle}
                         formatter={(value) => (
@@ -640,15 +836,25 @@ export function CampanasPage() {
                   Brevo no disponible o sin datos
                 </div>
               )}
-            </motion.section>
+          </motion.section>
 
-            <motion.section
+          <motion.section
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.4, delay: 0.16 }}
-              className={cn(cardSurface, "p-5 min-h-[260px]")}
+              className={cn(cardSurface, "p-5 min-h-[300px]")}
             >
-              <h3 className="text-sm font-semibold text-slate-800 mb-1">Clics por botón</h3>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between mb-1">
+                <h3 className="text-sm font-semibold text-slate-800">Clics por botón</h3>
+                {selectedId ? (
+                  <ChartExportPair
+                    busy={detailExportBusy}
+                    disabled={loadingDetail}
+                    onExcel={() => runCampaignDetailExport("xlsx", "clics_boton")}
+                    onCsv={() => runCampaignDetailExport("csv", "clics_boton")}
+                  />
+                ) : null}
+              </div>
               <p className="text-[11px] text-slate-500 mb-3">Benchmarking de CTAs en plantilla</p>
               {!selectedId ? (
                 <div className="h-44 flex items-center justify-center text-slate-500 text-sm">
@@ -656,13 +862,10 @@ export function CampanasPage() {
                 </div>
               ) : loadingDetail ? (
                 <div className="h-44 flex items-center justify-center text-slate-500 text-sm">Cargando…</div>
-              ) : clicksByButtonReport && clicksByButtonReport.buttons.length > 0 ? (
+              ) : clicksByButtonChartData.length > 0 ? (
                 <ResponsiveContainer width="100%" height={200}>
                   <BarChart
-                    data={clicksByButtonReport.buttons.map((b) => ({
-                      name: b.button_id.length > 14 ? `${b.button_id.slice(0, 12)}…` : b.button_id,
-                      clicks: b.clicks,
-                    }))}
+                    data={clicksByButtonChartData}
                     margin={{ top: 8, right: 12, left: 0, bottom: 28 }}
                   >
                     <CartesianGrid strokeDasharray="4 8" stroke={CHART_GRID} vertical={false} />
@@ -690,7 +893,7 @@ export function CampanasPage() {
                     <Tooltip
                       contentStyle={TOOLTIP_STYLE}
                       formatter={(value: number) => [value, "Clics"]}
-                      labelFormatter={(label) => `Botón: ${label}`}
+                      labelFormatter={(label) => "Bot\u00f3n: " + String(label)}
                     />
                     <Bar dataKey="clicks" fill={DASH.accent} radius={[6, 6, 0, 0]} name="Clics" />
                   </BarChart>
@@ -700,8 +903,7 @@ export function CampanasPage() {
                   Sin clics por botón
                 </div>
               )}
-            </motion.section>
-          </div>
+          </motion.section>
         </div>
 
         <div className="space-y-6 border-t border-slate-200/90 pt-10">
@@ -749,7 +951,7 @@ export function CampanasPage() {
             disabled={exporting}
           >
             <HiOutlineArrowDownTray className="h-4 w-4" />
-            {exporting ? "Descargando…" : "Descargar Excel"}
+            {exporting ? "Descargando…" : "Listado · Excel"}
           </Button>
         </div>
 

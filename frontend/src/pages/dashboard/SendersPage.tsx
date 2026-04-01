@@ -16,6 +16,7 @@ import {
   HiOutlinePlus,
   HiOutlinePencilSquare,
   HiOutlineTrash,
+  HiOutlineInformationCircle,
 } from "react-icons/hi2";
 
 const PER_PAGE = 50;
@@ -169,14 +170,47 @@ export function SendersPage() {
   return (
     <div className="p-6 sm:p-8 min-h-full bg-gradient-to-b from-slate-50 to-indigo-50/20">
       <div className="flex flex-col gap-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-800">
-              <span className="text-sky-600">Remitentes</span>
-            </h1>
-            <p className="mt-1 text-sm text-slate-500">
-              Listado de remitentes para las campañas. Registra y edita los datos aquí.
-            </p>
+        <div className="relative overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm shadow-slate-200/50 sm:p-8">
+          <div
+            className="pointer-events-none absolute -right-20 -top-20 h-56 w-56 rounded-full bg-gradient-to-br from-sky-500/12 via-transparent to-indigo-500/10 blur-2xl"
+            aria-hidden
+          />
+          <div className="relative flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-600">
+                Campañas y envío
+              </p>
+              <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+                Remitentes
+              </h1>
+              <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-600">
+                Define las direcciones y nombres que aparecerán como remitente en tus campañas.
+                Puedes <strong>dar de alta</strong> nuevos correos, <strong>editarlos</strong>,
+                buscarlos por email, nombre o ID y <strong>eliminarlos</strong> cuando el sistema lo
+                permita (si no están en uso).
+              </p>
+            </div>
+            <div className="flex shrink-0 justify-end lg:max-w-md">
+              <div className="flex w-full items-start gap-2 rounded-xl border border-sky-100 bg-sky-50/80 px-4 py-3 text-sm text-sky-900">
+                <HiOutlineInformationCircle className="mt-0.5 h-5 w-5 shrink-0 text-sky-600" />
+                <div className="space-y-1 text-sky-900/90">
+                  <p className="font-semibold text-sky-950">Guía rápida</p>
+                  <ul className="list-inside list-disc space-y-0.5 text-xs leading-relaxed text-sky-900/85">
+                    <li>
+                      Usa <strong>Nuevo remitente</strong> para registrar un correo que luego podrás
+                      elegir al programar envíos.
+                    </li>
+                    <li>
+                      <strong>Filtros</strong> acotan la tabla sin salir de la página.
+                    </li>
+                    <li>
+                      Si no puedes eliminar uno, suele estar vinculado a una campaña en curso o
+                      programada.
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 

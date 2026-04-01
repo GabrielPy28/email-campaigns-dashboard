@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import csv
-import io
 import re
 import uuid
 from io import BytesIO
@@ -14,7 +12,14 @@ from sqlalchemy import String, cast, func, or_
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.security import get_current_user
-from app.creators.io_helpers import normalize_csv_header, normalize_row_keys, row_to_creator_kwargs
+from app.creators.io_helpers import (
+    bulk_rows_carry_email,
+    group_bulk_rows_by_email,
+    iter_csv_dict_rows,
+    iter_xlsx_dict_rows,
+    platform_slug_to_id_map,
+    row_to_creator_bulk_kwargs,
+)
 from app.creators.schemas import (
     CreatorCreate,
     CreatorRead,
@@ -31,7 +36,12 @@ from app.creators.service import (
 from app.db.session import get_db
 from app.db import models
 from app.lists.creator_utils import apply_creator_fields
-from app.lists.schemas import ListaCreate, ListaRead, ListaUpdate
+from app.lists.schemas import (
+    LinkManyCreatorsToListBody,
+    ListaCreate,
+    ListaRead,
+    ListaUpdate,
+)
 
 
 lists_router = APIRouter(prefix="/listas", tags=["listas"])
@@ -272,7 +282,10 @@ def export_list_recipients_excel(
 @lists_router.post("/{list_id}/recipients/upload", response_model=dict)
 async def upload_recipients_to_list(
     list_id: str,
-    file: UploadFile = File(..., description="CSV con cabecera; columna requerida: email"),
+    file: UploadFile = File(
+        ...,
+        description="CSV o XLSX con columna email. Si el creador existe se actualiza y se asocia; si no existe, se crea y se asocia.",
+    ),
     db: Session = Depends(get_db),
     _: dict = Depends(get_current_user),
 ):
@@ -285,46 +298,82 @@ async def upload_recipients_to_list(
     raw = await file.read()
     if not raw:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Archivo vacío")
-    text = raw.decode("utf-8-sig", errors="replace")
-    reader = csv.DictReader(io.StringIO(text))
-    if not reader.fieldnames:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="CSV sin cabecera")
+    name = (file.filename or "").lower()
+    rows_iter: list[tuple[int, dict]]
+    if name.endswith(".xlsx") or name.endswith(".xlsm"):
+        rows_iter = list(iter_xlsx_dict_rows(raw))
+    elif name.endswith(".csv"):
+        rows_iter = list(iter_csv_dict_rows(raw))
+    else:
+        content_type = (file.content_type or "").lower()
+        if "spreadsheet" in content_type or "excel" in content_type:
+            rows_iter = list(iter_xlsx_dict_rows(raw))
+        elif "csv" in content_type or "text" in content_type:
+            rows_iter = list(iter_csv_dict_rows(raw))
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Formato no soportado. Use .csv o .xlsx",
+            )
 
-    fieldmap = {normalize_csv_header(h): h for h in reader.fieldnames if h}
-    if "email" not in fieldmap:
+    if not rows_iter:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Sin filas de datos")
+
+    sample_keys = set(rows_iter[0][1].keys())
+    if "email" not in sample_keys:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="El CSV debe incluir una columna 'email'.",
+            detail="El archivo debe incluir una columna 'email' (cabecera).",
         )
+
+    slug_to_id = platform_slug_to_id_map(db)
+    skipped_carry, carried = bulk_rows_carry_email(rows_iter)
+    grouped = group_bulk_rows_by_email(carried)
 
     linked_new = 0
     already_in_list = 0
-    skipped_empty_email = 0
+    created_creators = 0
+    updated_creators = 0
+    skipped_empty_email = len(skipped_carry)
     errors: list[str] = []
 
-    for i, row in enumerate(reader, start=2):
-        norm = normalize_row_keys(dict(row))
-        kwargs = row_to_creator_kwargs(norm)
-        if not kwargs.get("email"):
-            skipped_empty_email += 1
-            continue
+    for line_nos, merged in grouped:
+        label = f"Fila {line_nos[0]}" if len(line_nos) == 1 else f"Filas {','.join(map(str, line_nos))}"
         try:
+            kwargs = row_to_creator_bulk_kwargs(merged, slug_to_id)
+            email = str(kwargs.get("email") or "").strip().lower()
+            if not email:
+                skipped_empty_email += 1
+                continue
+            existed = (
+                db.query(models.Creator.id)
+                .filter(func.lower(models.Creator.email) == email)
+                .first()
+                is not None
+            )
             payload = CreatorCreate(**kwargs)
             c = upsert_creator_from_payload(db, payload)
+            if existed:
+                updated_creators += 1
+            else:
+                created_creators += 1
             if link_creator_to_list(db, lista, c):
                 linked_new += 1
             else:
                 already_in_list += 1
         except Exception as e:
-            errors.append(f"Fila {i}: {e}")
+            errors.append(f"{label}: {e}")
 
     db.commit()
     return {
         "list_id": str(lista.id),
+        "rows_upserted": created_creators + updated_creators,
+        "creators_created": created_creators,
+        "creators_updated": updated_creators,
         "linked_new": linked_new,
         "already_in_list": already_in_list,
         "skipped_empty_email": skipped_empty_email,
-        "errors": errors[:50],
+        "errors": errors[:100],
     }
 
 
@@ -372,6 +421,11 @@ def link_creator_to_list_endpoint(
     creator = db.query(models.Creator).filter(models.Creator.id == cid).first()
     if not creator:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Creador no encontrado")
+    if (creator.status or "activo") != "activo":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El creador está inactivo y no puede añadirse a listas.",
+        )
     added = link_creator_to_list(db, lista, creator)
     db.commit()
     return {
@@ -379,6 +433,53 @@ def link_creator_to_list_endpoint(
         "creator_id": str(creator.id),
         "linked": added,
         "message": "Ya estaba en la lista" if not added else "Creador añadido a la lista",
+    }
+
+
+@lists_router.post("/{list_id}/recipients/link-many", response_model=dict)
+def link_many_creators_to_list_endpoint(
+    list_id: str,
+    body: LinkManyCreatorsToListBody,
+    db: Session = Depends(get_db),
+    _: dict = Depends(get_current_user),
+):
+    try:
+        lid = uuid.UUID(list_id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lista no válida")
+    lista = _get_list_or_404(db, lid)
+
+    linked_new = 0
+    already_in_list = 0
+    skipped_inactive = 0
+    not_found: list[str] = []
+
+    for raw_id in body.creator_ids:
+        try:
+            cid = uuid.UUID(raw_id)
+        except ValueError:
+            not_found.append(raw_id)
+            continue
+        creator = db.query(models.Creator).filter(models.Creator.id == cid).first()
+        if not creator:
+            not_found.append(raw_id)
+            continue
+        if (creator.status or "activo") != "activo":
+            skipped_inactive += 1
+            continue
+        if link_creator_to_list(db, lista, creator):
+            linked_new += 1
+        else:
+            already_in_list += 1
+
+    db.commit()
+    return {
+        "list_id": str(lista.id),
+        "requested": len(body.creator_ids),
+        "linked_new": linked_new,
+        "already_in_list": already_in_list,
+        "skipped_inactive": skipped_inactive,
+        "not_found": not_found[:100],
     }
 
 

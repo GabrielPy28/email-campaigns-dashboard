@@ -166,7 +166,7 @@ def get_recipients_of_list_test(
     if not lista:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lista de prueba no encontrada")
     creators_sorted = sorted(lista.creators, key=lambda c: c.email.lower())
-    return [creator_to_read(c) for c in creators_sorted]
+    return [creator_to_read(db, c) for c in creators_sorted]
 
 
 @lists_test_router.post("/{list_id}/recipients/upload", response_model=dict)
@@ -249,7 +249,7 @@ def register_recipient_test(
     link_creator_to_list(db, lista, creator)
     db.commit()
     db.refresh(creator)
-    return creator_to_read(creator)
+    return creator_to_read(db, creator)
 
 
 @lists_test_router.post("/{list_id}/recipients/link", response_model=dict)
@@ -303,7 +303,7 @@ def get_recipient_test(
     creator = next((c for c in lista.creators if c.id == cid), None)
     if not creator:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Creador no está en esta lista")
-    return creator_to_read(creator)
+    return creator_to_read(db, creator)
 
 
 def _update_recipient_impl_test(
@@ -348,7 +348,7 @@ def _update_recipient_impl_test(
         apply_creator_fields(creator, **data)
     db.commit()
     db.refresh(creator)
-    return creator_to_read(creator)
+    return creator_to_read(db, creator)
 
 
 @lists_test_router.patch("/{list_id}/recipients/{creator_id}", response_model=CreatorRead)

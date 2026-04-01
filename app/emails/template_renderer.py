@@ -6,6 +6,8 @@ from typing import Any
 from urllib.parse import quote
 
 from bs4 import BeautifulSoup
+
+from app.core.config import get_settings
 from jinja2 import ChainableUndefined, Environment, Template
 
 # Mismo motor para asunto/preheader: sin autoescape; undefined encadenable (no rompe .a.b.c).
@@ -20,8 +22,6 @@ _JINJA_LINE_ENV = Environment(
 def coerce_extra_data_to_dict(raw: Any) -> dict:
     """
     Normaliza lo que venga de JSONB / ORM a dict plano.
-    Antes: `if not isinstance(extra, dict): extra = {}` vaciaba datos si el driver
-    devolvía otro Mapping (p. ej. tipos no-dict) o JSON serializado como str.
     """
     if raw is None:
         return {}
@@ -44,8 +44,7 @@ def coerce_extra_data_to_dict(raw: Any) -> dict:
 def _enrich_extra_with_creator_block(extra: dict) -> dict:
     """
     Garantiza claves planas (first_name, last_name, …) en el dict `extra` y luego
-    en el contexto raíz Jinja: algunas plantillas usan {{ first_name }} y el bloque
-    anidado solo vivía en extra.creator.
+    en el contexto raíz Jinja.
     """
     creator_sub = extra.get("creator")
     if not isinstance(creator_sub, Mapping):
@@ -63,6 +62,13 @@ def _enrich_extra_with_creator_block(extra: dict) -> dict:
     return extra
 
 
+def _public_unsubscribe_form_url() -> str:
+    base = (get_settings().public_frontend_url or "").strip().rstrip("/")
+    if not base:
+        base = "http://localhost:5173"
+    return f"{base}/baja-creador"
+
+
 def build_jinja_context_from_recipient(
     recipient: Any,
     sender_full_name: str,
@@ -72,7 +78,7 @@ def build_jinja_context_from_recipient(
     """
     Contexto Jinja2 para plantilla / asunto / preheader.
 
-    Si `extra_data` se pasa (p. ej. rehidratado desde `creators` en el envío),
+    Si `extra_data` se pasa (p. ej. desde la tabla`creators` en el envío),
     se usa en lugar de solo `recipient.extra_data` persistido en la campaña.
     """
     if extra_data is None:
@@ -100,6 +106,11 @@ def build_jinja_context_from_recipient(
     for k, v in extra.items():
         if k not in context:
             context[k] = v
+    unsub = _public_unsubscribe_form_url()
+    em = quote(str(getattr(recipient, "email", None) or ""), safe="")
+    context["unsubscribe_url"] = unsub
+    context["enlace_baja_creador"] = unsub
+    context["unsubscribe_url_with_email"] = f"{unsub}?email={em}" if em else unsub
     return context
 
 

@@ -10,7 +10,7 @@
  * ## Grupos
  * - **creator**: columnas de la fila del creador (producción: `creators`; prueba: `creators_test`).
  * - **account**: en producción, `account_profiles` por plataforma; en prueba, columnas equivalentes en `creators_test`.
- * - **envio**: remitente en el momento del envío (no es columna de creador).
+ * - **envio**: remitente en el momento del envío (no es columna de creador) y enlaces públicos (p. ej. baja).
  */
 
 export type TemplateVariableGroup = "creator" | "account" | "envio";
@@ -202,6 +202,27 @@ export const TEMPLATE_VARIABLES: TemplateVariableDef[] = [
     sourceHint: "Tabla senders / remitente asignado al enviar (no es columna de creador)",
     group: "envio",
   },
+  {
+    column: "unsubscribe_url",
+    expression: "{{ unsubscribe_url }}",
+    description: "URL del formulario público de baja (sin email en query)",
+    sourceHint: "PUBLIC_FRONTEND_URL + /baja-creador (inyectado en envío)",
+    group: "envio",
+  },
+  {
+    column: "unsubscribe_url_with_email",
+    expression: "{{ unsubscribe_url_with_email }}",
+    description: "Misma URL con ?email=… para pre-rellenar el formulario",
+    sourceHint: "Derivado en envío a partir del correo del destinatario",
+    group: "envio",
+  },
+  {
+    column: "enlace_baja_creador",
+    expression: "{{ enlace_baja_creador }}",
+    description: "Alias de unsubscribe_url (mismo valor)",
+    sourceHint: "Igual que unsubscribe_url",
+    group: "envio",
+  },
 ];
 
 /** Variables útiles en asunto y preheader (mismo contexto Jinja2 que el cuerpo HTML). */
@@ -216,4 +237,9 @@ export const SUBJECT_PREHEADER_SNIPPETS: { label: string; expression: string }[]
   { label: "Remitente — {{ sender_name }}", expression: "{{ sender_name }}" },
   { label: "Seguidores IG — {{ extra.account.instagram.followers_count }}", expression: "{{ extra.account.instagram.followers_count }}" },
   { label: "Handle IG — {{ extra.account.instagram.username }}", expression: "{{ extra.account.instagram.username }}" },
+  { label: "Baja creador — {{ unsubscribe_url }}", expression: "{{ unsubscribe_url }}" },
+  {
+    label: "Baja creador (con email) — {{ unsubscribe_url_with_email }}",
+    expression: "{{ unsubscribe_url_with_email }}",
+  },
 ];

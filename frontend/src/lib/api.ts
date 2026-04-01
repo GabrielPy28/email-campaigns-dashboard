@@ -169,6 +169,7 @@ export interface CampaignCreatePayload {
   /** Exactamente uno: list_id, creator_ids o recipients. */
   list_id?: string | null;
   creator_ids?: string[] | null;
+  segmentation_id?: string | null;
   recipients?: RecipientInput[] | null;
 }
 
@@ -192,6 +193,7 @@ export interface CampaignReadDetail {
   status: string;
   sender_ids: string[];
   list_id: string | null;
+  segmentation_id?: string | null;
   recipients: CampaignRecipientRead[];
 }
 
@@ -339,6 +341,34 @@ async function readApiError(res: Response): Promise<string> {
   return t || res.statusText || "Error";
 }
 
+/** POST público (sin JWT): formulario de baja de creador. */
+export interface CreatorUnsubscribePayload {
+  full_name: string;
+  email: string;
+  note?: string | null;
+}
+
+export interface CreatorUnsubscribeResult {
+  message: string;
+  creator_deactivated: boolean;
+}
+
+export async function submitCreatorUnsubscribe(
+  payload: CreatorUnsubscribePayload
+): Promise<CreatorUnsubscribeResult> {
+  const res = await fetch(`${getApiBaseUrl()}/public/creator-unsubscribe`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      full_name: payload.full_name.trim(),
+      email: payload.email.trim(),
+      note: payload.note?.trim() || null,
+    }),
+  });
+  if (!res.ok) throw new Error(await readApiError(res));
+  return res.json() as Promise<CreatorUnsubscribeResult>;
+}
+
 /** Cuerpo de `POST /creadores/` */
 export interface CreatorCreatePayload {
   email: string;
@@ -415,41 +445,51 @@ export async function uploadCreatorsFile(file: File): Promise<CreatorsUploadResu
   return res.json();
 }
 
-/** Filtro por plataforma en cliente: `creators_test` no tiene `account_profiles`; se usan URLs / campos legacy. */
-function filterCreatorsByPlatformIds(
-  creators: CreatorRead[],
-  platformIds: string[],
-  platforms: PlatformRead[]
-): CreatorRead[] {
-  if (platformIds.length === 0) return creators;
-  const nombreById = new Map(platforms.map((p) => [p.id, p.nombre]));
-  return creators.filter((c) =>
-    platformIds.every((pid) => {
-      if (c.account_profiles.some((ap) => ap.platform_id === pid)) return true;
-      const name = (nombreById.get(pid) ?? "").toLowerCase();
-      const t = (s: string | null | undefined) => !!s?.trim();
-      if (name.includes("instagram")) return t(c.instagram_url) || t(c.instagram_username);
-      if (name.includes("tiktok")) return t(c.tiktok_url) || t(c.tiktok_username);
-      if (name.includes("youtube")) return t(c.youtube_channel_url) || t(c.youtube_channel);
-      if (name.includes("facebook")) return t(c.facebook_page);
-      return false;
-    })
-  );
+/** Resultado de listados paginados (`X-Total-Count` en cabecera). */
+export interface CreatorPageResult {
+  items: CreatorRead[];
+  total: number;
 }
 
-/** `GET /creadores-test/` — mismos query params que producción excepto plataformas (refinado en cliente). */
+function readCreatorListTotal(res: Response): number {
+  const raw = res.headers.get("X-Total-Count");
+  if (raw == null || raw === "") return -1;
+  const n = parseInt(raw, 10);
+  return Number.isNaN(n) ? -1 : n;
+}
+
+export async function fetchCreatorsPage(
+  filters: CreatorListFilters = {}
+): Promise<CreatorPageResult> {
+  const res = await fetchWithAuth(`/creadores/${buildCreatorListParams(filters)}`);
+  if (!res.ok) throw new Error(await readApiError(res));
+  const t = readCreatorListTotal(res);
+  const items: CreatorRead[] = await res.json();
+  return { items, total: t >= 0 ? t : items.length };
+}
+
+/** `GET /creadores-test/` — plataformas filtradas en servidor (columnas planas). */
+export async function fetchCreatorsTestPage(
+  filters: CreatorListFilters = {}
+): Promise<CreatorPageResult> {
+  const res = await fetchWithAuth(`/creadores-test/${buildCreatorListParams(filters)}`);
+  if (!res.ok) throw new Error(await readApiError(res));
+  const t = readCreatorListTotal(res);
+  const items: CreatorRead[] = await res.json();
+  return { items, total: t >= 0 ? t : items.length };
+}
+
+/** `GET /creadores-test/` — compat: devuelve solo filas (sin total). */
 export async function fetchCreatorsTest(
   filters: CreatorListFilters = {},
-  platforms: PlatformRead[] = []
+  _platforms: PlatformRead[] = []
 ): Promise<CreatorRead[]> {
-  const { platform_ids, ...rest } = filters;
-  const q = buildCreatorListParams(rest);
-  const res = await fetchWithAuth(`/creadores-test/${q}`);
+  void _platforms;
+  const res = await fetchWithAuth(
+    `/creadores-test/${buildCreatorListParams(filters)}`
+  );
   if (!res.ok) throw new Error(await readApiError(res));
   let rows: CreatorRead[] = await res.json();
-  if (platform_ids && platform_ids.length > 0) {
-    rows = filterCreatorsByPlatformIds(rows, platform_ids, platforms);
-  }
   if (filters.status === "inactivo") {
     rows = rows.filter((c) => c.status === "inactivo");
   }
@@ -647,6 +687,168 @@ export async function linkCreatorToLista(
   return res.json();
 }
 
+export interface LinkManyCreatorsToListaResult {
+  list_id: string;
+  requested: number;
+  linked_new: number;
+  already_in_list: number;
+  /** Creadores inactivos omitidos (no se enlazan a la lista). */
+  skipped_inactive?: number;
+  not_found: string[];
+}
+
+export async function linkManyCreatorsToLista(
+  listId: string,
+  creatorIds: string[]
+): Promise<LinkManyCreatorsToListaResult> {
+  const res = await fetchWithAuth(
+    `/listas/${encodeURIComponent(listId)}/recipients/link-many`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ creator_ids: creatorIds }),
+    }
+  );
+  if (!res.ok) throw new Error(await readApiError(res));
+  return res.json();
+}
+
+export type SegmentationCriteria =
+  | "no_open"
+  | "opened_no_click"
+  | "opened_and_clicked";
+
+export interface SegmentationRead {
+  id: string;
+  nombre: string;
+  campaign_id: string;
+  campaign_ids: string[];
+  criteria: SegmentationCriteria;
+  status: "activo" | "inactivo";
+  created_at: string;
+  created_by: string;
+  num_creators: number;
+}
+
+export interface SegmentationCreatePayload {
+  nombre: string;
+  campaign_ids: string[];
+  criteria: SegmentationCriteria;
+  status?: "activo" | "inactivo";
+}
+
+export interface SegmentationListFilters {
+  search?: string;
+  status?: string;
+}
+
+export interface SegmentationUpdatePayload {
+  nombre?: string;
+  campaign_ids?: string[];
+  criteria?: SegmentationCriteria;
+  status?: "activo" | "inactivo";
+}
+
+export async function fetchSegmentaciones(filters: SegmentationListFilters = {}): Promise<SegmentationRead[]> {
+  const params = new URLSearchParams();
+  if (filters.search?.trim()) params.set("search", filters.search.trim());
+  if (filters.status?.trim()) params.set("status", filters.status.trim());
+  const q = params.toString();
+  const res = await fetchWithAuth(`/segmentaciones/${q ? `?${q}` : ""}`);
+  if (!res.ok) throw new Error(await readApiError(res));
+  return res.json();
+}
+
+export async function fetchSegmentacionById(segmentationId: string): Promise<SegmentationRead> {
+  const res = await fetchWithAuth(`/segmentaciones/${encodeURIComponent(segmentationId)}`);
+  if (!res.ok) throw new Error(await readApiError(res));
+  return res.json();
+}
+
+export async function createSegmentacion(payload: SegmentationCreatePayload): Promise<SegmentationRead> {
+  const res = await fetchWithAuth("/segmentaciones/", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(await readApiError(res));
+  return res.json();
+}
+
+export async function updateSegmentacion(segmentationId: string, payload: SegmentationUpdatePayload): Promise<SegmentationRead> {
+  const res = await fetchWithAuth(`/segmentaciones/${encodeURIComponent(segmentationId)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(await readApiError(res));
+  return res.json();
+}
+
+export async function refreshSegmentacion(segmentationId: string): Promise<SegmentationRead> {
+  const res = await fetchWithAuth(`/segmentaciones/${encodeURIComponent(segmentationId)}/refresh`, {
+    method: "POST",
+  });
+  if (!res.ok) throw new Error(await readApiError(res));
+  return res.json();
+}
+
+export async function deleteSegmentacion(segmentationId: string): Promise<void> {
+  const res = await fetchWithAuth(`/segmentaciones/${encodeURIComponent(segmentationId)}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(await readApiError(res));
+}
+
+export async function downloadSegmentacionRecipients(segmentationId: string, format: "csv" | "xlsx"): Promise<void> {
+  const res = await fetchWithAuth(
+    `/segmentaciones/${encodeURIComponent(segmentationId)}/export?format=${format}`
+  );
+  if (!res.ok) throw new Error(await readApiError(res));
+  const blob = await res.blob();
+  const name =
+    res.headers.get("Content-Disposition")?.match(/filename="?([^";]+)"?/)?.[1] ||
+    `segmentacion-${segmentationId}.${format}`;
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+export async function fetchSegmentacionRecipients(segmentationId: string): Promise<CreatorRead[]> {
+  const res = await fetchWithAuth(`/segmentaciones/${encodeURIComponent(segmentationId)}/recipients`);
+  if (!res.ok) throw new Error(await readApiError(res));
+  return res.json();
+}
+
+export interface ListaUploadRecipientsResult {
+  list_id: string;
+  rows_upserted: number;
+  creators_created: number;
+  creators_updated: number;
+  linked_new: number;
+  already_in_list: number;
+  skipped_empty_email: number;
+  errors: string[];
+}
+
+export async function uploadListaRecipientsFile(
+  listId: string,
+  file: File
+): Promise<ListaUploadRecipientsResult> {
+  const fd = new FormData();
+  fd.append("file", file);
+  const res = await fetchWithAuth(
+    `/listas/${encodeURIComponent(listId)}/recipients/upload`,
+    {
+      method: "POST",
+      body: fd,
+    }
+  );
+  if (!res.ok) throw new Error(await readApiError(res));
+  return res.json();
+}
+
 export async function fetchListasTest(filters: ListaListFilters = {}): Promise<ListaRead[]> {
   const q = buildListaListParams(filters);
   const res = await fetchWithAuth(`/listas-test/${q}`);
@@ -695,6 +897,61 @@ export async function downloadCampaignsExcel(filters: CampaignFilters = {}): Pro
   const a = document.createElement("a");
   a.href = url;
   a.download = "campaigns.xlsx";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+export type CampaignDetailExportSection =
+  | "full"
+  | "resumen"
+  | "actividad_destinatarios"
+  | "dispositivos"
+  | "clics_boton"
+  | "brevo_interno"
+  | "remitente";
+
+function parseAttachmentFilename(contentDisposition: string | null): string | null {
+  if (!contentDisposition) return null;
+  const star = contentDisposition.match(/filename\*=UTF-8''([^;\s]+)/i);
+  if (star) {
+    try {
+      return decodeURIComponent(star[1].replace(/^"(.*)"$/, "$1"));
+    } catch {
+      return null;
+    }
+  }
+  const quoted = contentDisposition.match(/filename="([^"]+)"/i);
+  if (quoted) return quoted[1].trim();
+  const plain = contentDisposition.match(/filename=([^;\s]+)/i);
+  return plain ? plain[1].replace(/^"(.*)"$/, "$1").trim() : null;
+}
+
+/** Exporta KPIs, tablas detrás de los gráficos y comparativa Brevo. CSV completo = ZIP con varios CSV. */
+export async function downloadCampaignDetailExport(
+  campaignId: string,
+  opts: { format: "xlsx" | "csv"; section: CampaignDetailExportSection }
+): Promise<void> {
+  const params = new URLSearchParams({
+    format: opts.format,
+    section: opts.section,
+  });
+  const res = await fetchWithAuth(
+    `/reports/campaigns/${encodeURIComponent(campaignId)}/export/detail?${params.toString()}`
+  );
+  if (!res.ok) throw new Error(await readApiError(res));
+  const blob = await res.blob();
+  const fromHeader = parseAttachmentFilename(res.headers.get("Content-Disposition"));
+  const fallback =
+    opts.format === "csv" && opts.section === "full"
+      ? "campana_resultados.zip"
+      : opts.format === "xlsx"
+        ? "campana_resultados.xlsx"
+        : "campana_resultados.csv";
+  const filename = fromHeader || fallback;
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
 }

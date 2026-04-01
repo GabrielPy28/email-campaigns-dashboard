@@ -52,12 +52,24 @@ def _get_creator_or_404(db: Session, creator_id: uuid.UUID) -> models.Creator:
     return c
 
 
+def _count_filtered_creators(db: Session, q) -> int:
+    """Cuenta creadores sin usar `q.count()` (puede mutar el Query y romper el `.all()` posterior)."""
+    subq = (
+        q.with_entities(models.Creator.id)
+        .distinct()
+        .subquery(name="creators_filtered_ids")
+    )
+    n = db.query(func.count()).select_from(subq).scalar()
+    return int(n or 0)
+
+
 @creators_router.get("/", response_model=list[CreatorRead])
 def list_creators(
+    response: Response,
     db: Session = Depends(get_db),
     _: dict = Depends(get_current_user),
     skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=500),
+    limit: int = Query(100, ge=1, le=1000),
     search: str | None = Query(None, description="Buscar en email, nombre, username o ID (contiene)"),
     id_contains: str | None = Query(None),
     email_contains: str | None = Query(None),
@@ -122,6 +134,8 @@ def list_creators(
     if max_campaigns is not None:
         q = q.filter(nc_expr <= max_campaigns)
 
+    total = _count_filtered_creators(db, q)
+    response.headers["X-Total-Count"] = str(total)
     rows = q.order_by(models.Creator.email.asc()).offset(skip).limit(limit).all()
     return [
         creator_to_read(c, num_campaigns=int(nc or 0), account_profiles=[])

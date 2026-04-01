@@ -34,3 +34,11 @@ class ListaDetailRead(ListaRead):
     """Lista con creadores embebidos (opcional)."""
 
     creators: list[CreatorRead] = Field(default_factory=list)
+
+
+class LinkManyCreatorsToListBody(BaseModel):
+    creator_ids: list[str] = Field(
+        ...,
+        min_length=1,
+        description="UUIDs de creadores existentes para asociar a la lista.",
+    )

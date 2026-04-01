@@ -9,9 +9,11 @@ import {
   HiOutlineDocumentText,
   HiOutlineChartBar,
   HiOutlineClipboardDocumentList,
+  HiOutlineSquares2X2,
   HiOutlineUserGroup,
   HiOutlineBeaker,
   HiOutlineQrCode,
+  HiOutlineBookOpen,
 } from "react-icons/hi2";
 import { HiOutlineMail, HiOutlineLogout } from "react-icons/hi";
 
@@ -51,6 +53,7 @@ const navSections: {
     title: "Audiencia",
     items: [
       { to: "/dashboard/listas", label: "Listas", icon: HiOutlineClipboardDocumentList, accent: "purple" },
+      { to: "/dashboard/segmentaciones", label: "Segmentación", icon: HiOutlineSquares2X2, accent: "purple" },
       { to: "/dashboard/creadores", label: "Creadores", icon: HiOutlineUserGroup, accent: "blue" },
     ],
   },
@@ -58,7 +61,18 @@ const navSections: {
     title: "Entorno de prueba",
     items: [
       { to: "/dashboard/pruebas", label: "Pruebas", icon: HiOutlineBeaker, accent: "pink" },
-      //{ to: "/dashboard/codigos-qr", label: "Códigos QR", icon: HiOutlineQrCode, accent: "pink" },
+      { to: "/dashboard/codigos-qr", label: "Códigos QR", icon: HiOutlineQrCode, accent: "pink" },
+    ],
+  },
+  {
+    title: "Ayuda",
+    items: [
+      {
+        to: "/dashboard/documentacion",
+        label: "Documentación",
+        icon: HiOutlineBookOpen,
+        accent: "blue",
+      },
     ],
   },
 ];

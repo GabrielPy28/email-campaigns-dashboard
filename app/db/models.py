@@ -42,6 +42,13 @@ creators_list_test = Table(
     Column("creator_id", UUID(as_uuid=True), ForeignKey("creators_test.id", ondelete="CASCADE"), primary_key=True),
 )
 
+segmentations_creators = Table(
+    "segmentations_creators",
+    Base.metadata,
+    Column("segmentation_id", UUID(as_uuid=True), ForeignKey("segmentations.id", ondelete="CASCADE"), primary_key=True),
+    Column("creator_id", UUID(as_uuid=True), ForeignKey("creators.id", ondelete="CASCADE"), primary_key=True),
+)
+
 
 class AuthUser(Base):
     """
@@ -144,6 +151,33 @@ class Creator(Base):
         "AccountProfile",
         back_populates="creator",
         cascade="all, delete-orphan",
+    )
+    segmentations: Mapped[list["Segmentation"]] = relationship(
+        "Segmentation",
+        secondary=segmentations_creators,
+        back_populates="creators",
+    )
+
+
+class UnsubscribedCreator(Base):
+    """Solicitudes de baja desde el formulario público (registro + auditoría)."""
+
+    __tablename__ = "unsubscribed_creator"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    full_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    email: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    creator_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("creators.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, nullable=False
     )
 
 
@@ -256,6 +290,89 @@ class CreatorTest(Base):
     )
 
 
+class Segmentation(Base):
+    """Segmentación dinámica persistida para campañas de seguimiento."""
+
+    __tablename__ = "segmentations"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    nombre: Mapped[str] = mapped_column(String(255), nullable=False)
+    campaign_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("campaigns.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    criteria: Mapped[str] = mapped_column(String(40), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="activo")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, nullable=False
+    )
+    created_by: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+
+    campaign: Mapped["Campaign"] = relationship("Campaign", foreign_keys=[campaign_id])
+    creators: Mapped[list["Creator"]] = relationship(
+        "Creator",
+        secondary=segmentations_creators,
+        back_populates="segmentations",
+    )
+    source_lists: Mapped[list["SegmentationListSource"]] = relationship(
+        "SegmentationListSource",
+        back_populates="segmentation",
+        cascade="all, delete-orphan",
+    )
+    source_campaigns: Mapped[list["SegmentationCampaignSource"]] = relationship(
+        "SegmentationCampaignSource",
+        back_populates="segmentation",
+        cascade="all, delete-orphan",
+    )
+
+
+class SegmentationListSource(Base):
+    """Listas origen de la segmentación, conservando el orden para resolución de duplicados."""
+
+    __tablename__ = "segmentation_list_sources"
+    __table_args__ = (
+        UniqueConstraint("segmentation_id", "list_id", name="uq_segmentation_list_source"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    segmentation_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("segmentations.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    list_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("listas.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    segmentation: Mapped["Segmentation"] = relationship("Segmentation", back_populates="source_lists")
+    lista: Mapped["Lista"] = relationship("Lista")
+
+
+class SegmentationCampaignSource(Base):
+    """Campañas origen de la segmentación, manteniendo orden de selección."""
+
+    __tablename__ = "segmentation_campaign_sources"
+    __table_args__ = (
+        UniqueConstraint("segmentation_id", "campaign_id", name="uq_segmentation_campaign_source"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    segmentation_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("segmentations.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    campaign_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("campaigns.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    segmentation: Mapped["Segmentation"] = relationship("Segmentation", back_populates="source_campaigns")
+    campaign: Mapped["Campaign"] = relationship("Campaign")
+
+
 class Campaign(Base):
     __tablename__ = "campaigns"
 
@@ -283,6 +400,10 @@ class Campaign(Base):
     list_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("listas.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    segmentation_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
         nullable=True,
     )
     is_test: Mapped[bool] = mapped_column(default=False, nullable=False)
@@ -392,7 +513,7 @@ class QrCodeScanDay(Base):
 
 class IpGeolocationCache(Base):
     """
-    Cache simple de resolución IP -> país para reducir llamadas a la API externa.
+    Cache simple de resolución IP
     """
 
     __tablename__ = "ip_geolocation_cache"

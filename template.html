@@ -1,212 +1,725 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <title>Elevn Launch - April 2026</title>
-    <!-- IMPORT MONTSERRAT -->
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700;800&display=swap" rel="stylesheet">
-    <style>
-        /* RESET STYLES */
-        body, table, td, a { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
-        table, td { mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
-        img { -ms-interpolation-mode: bicubic; border: 0; height: auto; line-height: 100%; outline: none; text-decoration: none; }
-        table { border-collapse: collapse !important; }
-        body { 
-            height: 100% !important; 
-            margin: 0 !important; 
-            padding: 0 !important; 
-            width: 100% !important; 
-            background-color: #F8FAFC; 
-            font-family: 'Montserrat', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-        }
-
-        /* MOBILE STYLES */
-        @media screen and (max-width: 600px) {
-            .container { width: 100% !important; }
-            .stack { display: block !important; width: 100% !important; }
-            .hero-text { font-size: 28px !important; line-height: 34px !important; }
-            .padding-mobile { padding: 20px !important; }
-            .center-mobile { text-align: center !important; }
-        }
-    </style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="x-apple-disable-message-reformatting">
+  <meta name="format-detection" content="telephone=no,address=no,email=no,date=no,url=no">
+  <title>Discover LaNetaSend.me</title>
+  <!--[if mso]>
+  <noscript>
+    <xml>
+      <o:OfficeDocumentSettings>
+        <o:AllowPNG/>
+        <o:PixelsPerInch>96</o:PixelsPerInch>
+      </o:OfficeDocumentSettings>
+    </xml>
+  </noscript>
+  <![endif]-->
+  <style>
+    /* Reset */
+    body, table, td, a { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
+    table, td { mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
+    img { -ms-interpolation-mode: bicubic; border: 0; height: auto; line-height: 100%; outline: none; text-decoration: none; }
+    body { margin: 0; padding: 0; width: 100% !important; height: 100% !important; }
+    a[x-apple-data-detectors] { color: inherit !important; text-decoration: none !important; font-size: inherit !important; font-family: inherit !important; font-weight: inherit !important; line-height: inherit !important; }
+    /* Gmail fix */
+    u + #body a { color: inherit; text-decoration: none; font-size: inherit; font-family: inherit; font-weight: inherit; line-height: inherit; }
+    #MessageViewBody a { color: inherit; text-decoration: none; font-size: inherit; font-family: inherit; font-weight: inherit; line-height: inherit; }
+    /* Dark mode */
+    @media (prefers-color-scheme: dark) {
+      .dark-bg { background-color: #1a1a2e !important; }
+      .dark-card { background-color: #16213e !important; }
+      .dark-text { color: #e0e0e0 !important; }
+      .dark-subtext { color: #b0b0b0 !important; }
+    }
+    /* Responsive */
+    @media only screen and (max-width: 620px) {
+      .wrapper { width: 100% !important; max-width: 100% !important; }
+      .responsive-table { width: 100% !important; }
+      .padding { padding: 10px 5% !important; }
+      .padding-top { padding-top: 24px !important; }
+      .section-padding { padding: 28px 20px !important; }
+      .mobile-hide { display: none !important; }
+      .mobile-block { display: block !important; width: 100% !important; }
+      .mobile-center { text-align: center !important; }
+      /* Feature cards: stack vertically */
+      .feature-col { display: block !important; width: 100% !important; padding: 0 0 16px 0 !important; box-sizing: border-box !important; }
+      .hero-title { font-size: 24px !important; line-height: 30px !important; }
+      .hero-sub { font-size: 15px !important; line-height: 23px !important; }
+      /* CTA buttons full-width and touch-friendly */
+      .cta-button { width: 100% !important; }
+      .cta-button a { display: block !important; width: 100% !important; text-align: center !important; padding: 16px 20px !important; box-sizing: border-box !important; }
+      /* Variables table: make scrollable and reduce font size */
+      .var-table { font-size: 11px !important; }
+      .var-table td { padding: 8px 10px !important; }
+      .var-name { font-size: 11px !important; word-break: break-all !important; }
+      .var-desc { font-size: 12px !important; }
+      /* Steps and benefits: tighter layout */
+      .step-icon { width: 40px !important; }
+      .step-icon td { width: 36px !important; height: 36px !important; font-size: 15px !important; line-height: 36px !important; }
+      .step-text { padding-left: 10px !important; }
+      .step-title { font-size: 14px !important; }
+      .step-desc { font-size: 12px !important; line-height: 18px !important; }
+      /* Section titles smaller on mobile */
+      .section-title { font-size: 19px !important; line-height: 26px !important; }
+      .section-subtitle { font-size: 13px !important; line-height: 20px !important; }
+      /* Footer tighter */
+      .footer-padding { padding: 24px 20px !important; }
+      /* Header logo smaller */
+      .header-logo img { max-width: 140px !important; width: 140px !important; }
+    }
+    /* Extra small devices */
+    @media only screen and (max-width: 400px) {
+      .section-padding { padding: 24px 16px !important; }
+      .hero-title { font-size: 21px !important; line-height: 27px !important; }
+      .hero-sub { font-size: 14px !important; line-height: 21px !important; }
+      .section-title { font-size: 17px !important; line-height: 24px !important; }
+      .var-name { font-size: 10px !important; }
+    }
+  </style>
 </head>
-<body style="margin: 0; padding: 0; background-color: #F8FAFC; font-family: 'Montserrat', sans-serif;">
-    <center>
-        <table border="0" cellpadding="0" cellspacing="0" width="100%" style="table-layout: fixed; background-color: #F8FAFC;">
-            <tr>
-                <td align="center">
-                    <!-- PREHEADER TEXT -->
-                    <div style="display: none; font-size: 1px; color: #F8FAFC; line-height: 1px; max-height: 0px; max-width: 0px; opacity: 0; overflow: hidden;">
-                        Elevn is launching in April 2026. Apply, Create, Earn. The platform where creators meet brands.
-                    </div>
+<body id="body" style="margin:0; padding:0; background-color:#f0f2f5;" class="dark-bg">
 
-                    <!-- MAIN CONTAINER -->
-                    <table border="0" cellpadding="0" cellspacing="0" width="600" class="container" style="background-color: #ffffff; border-radius: 8px; margin: 40px 0; font-family: 'Montserrat', sans-serif;">
-                        
-                        <!-- HEADER / LOGO -->
-                        <tr>
-                            <td align="center" style="padding: 40px 0 30px 0;">
-                                <a href="https://www.elevn.me/#faq" target="_blank" data-button-id="logo">
-                                    <img src="https://la-neta-videos-ubicacion.s3.us-east-1.amazonaws.com/elevn.png" alt="ELEVN Logo" width="160" style="display: block; width: 160px; max-width: 160px;">
-                                </a>
-                            </td>
-                        </tr>
+<!-- Preheader -->
+<div style="display:none; font-size:1px; color:#f0f2f5; line-height:1px; max-height:0px; max-width:0px; opacity:0; overflow:hidden;">
+  {{ extra.creator.first_name }}, send mass campaigns without landing in spam &mdash; hyper-personalization, tracking &amp; sender reputation protection with LaNetaSend.me
+  &#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;
+</div>
 
-                        <!-- HERO SECTION -->
-                        <tr>
-                            <td align="center" style="padding: 40px; background: linear-gradient(135deg, #6641ed 0%, #79bcf7 100%);" class="padding-mobile">
-                                <h2 style="margin: 0 0 15px 0; color: #ffffff; font-size: 36px; line-height: 42px; font-weight: 800; font-family: 'Montserrat', sans-serif;" class="hero-text">
-                                    Apply. Create. Earn.
-                                </h2>
-                                <p style="margin: 0 0 25px 0; color: #ffffff; font-size: 18px; line-height: 26px; opacity: 0.9; font-family: 'Montserrat', sans-serif;">
-                                    The platform where creators meet brands, scale fast, and own the industry. Launching in April.
-                                </p>
-                                <!-- CTA BUTTON -->
-                                <table border="0" cellpadding="0" cellspacing="0">
-                                    <tr>
-                                        <td align="center" bgcolor="#ff47ac" style="border-radius: 50px;">
-                                            <a href="https://www.elevn.me/#faq" target="_blank" data-button-id="hero-cta-apply" style="padding: 15px 35px; font-size: 18px; font-weight: bold; color: #ffffff; text-decoration: none; display: inline-block; font-family: 'Montserrat', sans-serif;">
-                                                Be one of the first to join
-                                            </a>
-                                        </td>
-                                    </tr>
-                                </table>
-                                <p style="margin: 15px 0 0 0; color: #ffffff; font-size: 14px; font-family: 'Montserrat', sans-serif;">Free to apply. Limited early spots.</p>
-                            </td>
-                        </tr>
+<!-- Wrapper -->
+<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color:#f0f2f5;" class="dark-bg">
+<tr>
+<td align="center" style="padding: 20px 10px;">
 
-                        <!-- DESCRIPTION SECTION -->
-                        <tr>
-                            <td style="padding: 40px; color: #334155;" class="padding-mobile">
-                                <p style="font-size: 16px; line-height: 24px; margin: 0 0 20px 0; font-family: 'Montserrat', sans-serif;">
-                                    Hello <strong>{{ nombre }}</strong>, I hope this message finds you well. My name is {{ sender_name }}, and I'm delighted to reach out to you today. I have something special to share that I think you'll find valuable.
-                                </p>
-                                <p style="font-size: 16px; line-height: 24px; margin: 0; font-family: 'Montserrat', sans-serif;">
-                                    <strong>ELEVN</strong> is your gateway to vetted brand deals, real training, and a community built for professional creators. Apply once, unlock ongoing opportunities, and grow a career where your work and time are respected.
-                                </p>
-                            </td>
-                        </tr>
+<!-- Container 600px -->
+<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="600" class="wrapper" style="max-width:600px; margin:0 auto;">
 
-                        <!-- VALUE PROPS TITLE -->
-                        <tr>
-                            <td align="center" style="padding: 0 40px 20px 40px;">
-                                <h3 style="margin: 0; color: #6641ed; font-size: 22px; text-transform: uppercase; font-weight: 800; font-family: 'Montserrat', sans-serif;">What you can expect on ELEVN</h3>
-                                <div style="height: 3px; width: 50px; background-color: #ff47ac; margin-top: 10px;"></div>
-                            </td>
-                        </tr>
+  <!-- ============================================
+       HEADER / LOGO BAR (light background)
+       ============================================ -->
+  <tr>
+    <td style="padding: 24px 30px; background-color:#f0f2f5; border-radius: 12px 12px 0 0; text-align:center; border-bottom: 1px solid #e5e7eb;" class="section-padding">
+      <a href="https://elevn.me" data-button-id="header-logo" target="_blank" style="text-decoration:none;" class="header-logo">
+        <img src="https://la-neta-videos-ubicacion.s3.us-east-1.amazonaws.com/elevn.png" width="180" alt="ELEVN" style="display:inline-block; max-width:180px; height:auto; background-color:#f0f2f5;" />
+      </a>
+    </td>
+  </tr>
 
-                        <!-- THREE PILLARS SECTIONS -->
-                        <tr>
-                            <td style="padding: 20px 40px;" class="padding-mobile">
-                                <!-- Pillar 1 -->
-                                <table width="100%" border="0" cellpadding="0" cellspacing="0" style="margin-bottom: 30px;">
-                                    <tr>
-                                        <td width="50" valign="top" style="padding-right: 20px;">
-                                            <img src="https://img.icons8.com/ios-filled/100/79bcf7/ok--v1.png" alt="Icono de verificación" width="40" style="display: block; width: 40px;">
-                                        </td>
-                                        <td>
-                                            <h4 style="margin: 0 0 5px 0; color: #6641ed; font-size: 18px; font-weight: 700; font-family: 'Montserrat', sans-serif;">Verified opportunities</h4>
-                                            <p style="margin: 0; font-size: 14px; line-height: 20px; color: #64748b; font-family: 'Montserrat', sans-serif;">Every brief on ELEVN is vetted. Clear scope, budgets, and timelines so you know exactly what you’re saying yes to.</p>
-                                        </td>
-                                    </tr>
-                                </table>
-
-                                <!-- Pillar 2 -->
-                                <table width="100%" border="0" cellpadding="0" cellspacing="0" style="margin-bottom: 30px;">
-                                    <tr>
-                                        <td width="50" valign="top" style="padding-right: 20px;">
-                                            <img src="https://img.icons8.com/ios-filled/100/6641ed/star--v1.png" alt="Icono de estrella profesional" width="40" style="display: block; width: 40px;">
-                                        </td>
-                                        <td>
-                                            <h4 style="margin: 0 0 5px 0; color: #6641ed; font-size: 18px; font-weight: 700; font-family: 'Montserrat', sans-serif;">Professional growth</h4>
-                                            <p style="margin: 0; font-size: 14px; line-height: 20px; color: #64748b; font-family: 'Montserrat', sans-serif;">Training, tools, and feedback designed for serious creators who want to turn content into a real business.</p>
-                                        </td>
-                                    </tr>
-                                </table>
-
-                                <!-- Pillar 3 -->
-                                <table width="100%" border="0" cellpadding="0" cellspacing="0" style="margin-bottom: 10px;">
-                                    <tr>
-                                        <td width="50" valign="top" style="padding-right: 20px;">
-                                            <img src="https://img.icons8.com/ios-filled/100/ff47ac/currency-exchange.png" alt="Icono de ecosistema financiero" width="40" style="display: block; width: 40px;">
-                                        </td>
-                                        <td>
-                                            <h4 style="margin: 0 0 5px 0; color: #6641ed; font-size: 18px; font-weight: 700; font-family: 'Montserrat', sans-serif;">Real ecosystem</h4>
-                                            <p style="margin: 0; font-size: 14px; line-height: 20px; color: #64748b; font-family: 'Montserrat', sans-serif;">A creator-first network where collaborations are fair, transparent, and built for repeat work—not one-offs.</p>
-                                        </td>
-                                    </tr>
-                                </table>
-                            </td>
-                        </tr>
-
-                        <!-- QUOTE/HIGHLIGHT SECTION -->
-                        <tr>
-                            <td align="center" style="padding: 40px; background-color: #F8FAFC; border-left: 4px solid #6641ed;">
-                                <h3 style="margin: 0 0 10px 0; font-size: 24px; color: #0f172a; font-weight: 700; font-family: 'Montserrat', sans-serif;">A clear path to a real creator career.</h3>
-                                <p style="margin: 0; font-size: 16px; color: #475569; line-height: 24px; font-family: 'Montserrat', sans-serif;">
-                                    No endless scrolling. No noise. Just the core pieces you need to grow: work, skills, support, and a community that takes this as seriously as you do.
-                                </p>
-                            </td>
-                        </tr>
-
-                        <!-- DISCORD COMMUNITY -->
-                        <tr>
-                            <td style="padding: 40px;" class="padding-mobile">
-                                <h4 style="margin: 0 0 10px 0; color: #6641ed; font-size: 20px; font-weight: 700; font-family: 'Montserrat', sans-serif;">Find your people · Encuentra tu comunidad</h4>
-                                <p style="margin: 0 0 15px 0; font-size: 14px; line-height: 20px; color: #475569; font-family: 'Montserrat', sans-serif;">
-                                    Your niche has a room on Discord. Jump in, meet fellow creators, and be the first to hear about new opportunities.
-                                </p>
-                                <p style="margin: 0 0 20px 0; font-size: 14px; line-height: 20px; color: #475569; font-style: italic; font-family: 'Montserrat', sans-serif;">
-                                    Tu nicho tiene su propio espacio en Discord: conéctate, conoce a otros creadores y entérate primero de lo que pasa en ELEVN.
-                                </p>
-                                <!-- DISCORD BUTTON -->
-                                <table border="0" cellpadding="0" cellspacing="0">
-                                    <tr>
-                                        <td align="center" bgcolor="#79bcf7" style="border-radius: 4px;">
-                                            <a href="https://discord.gg/bTUEWVjz" target="_blank" data-button-id="discord-cta" style="padding: 10px 20px; font-size: 14px; font-weight: bold; color: #ffffff; text-decoration: none; display: inline-block; font-family: 'Montserrat', sans-serif;">
-                                                Join our Discord
-                                            </a>
-                                        </td>
-                                    </tr>
-                                </table>
-                            </td>
-                        </tr>
-
-                        <!-- FINAL CTA -->
-                        <tr>
-                            <td align="center" style="padding: 40px; background-color: #ffffff; border-top: 1px solid #e2e8f0;">
-                                <p style="margin: 0 0 20px 0; font-size: 14px; color: #64748b; font-family: 'Montserrat', sans-serif;">More opportunities added regularly. Apply through ELEVN and get access.</p>
-                                <table border="0" cellpadding="0" cellspacing="0">
-                                    <tr>
-                                        <td align="center" bgcolor="#6641ed" style="border-radius: 4px;">
-                                            <a href="https://www.elevn.me/#faq" target="_blank" data-button-id="final-cta-apply" style="padding: 18px 40px; font-size: 18px; font-weight: bold; color: #ffffff; text-decoration: none; display: inline-block; font-family: 'Montserrat', sans-serif;">
-                                                Apply for the Creator Ecosystem
-                                            </a>
-                                        </td>
-                                    </tr>
-                                </table>
-                            </td>
-                        </tr>
-
-                        <!-- FOOTER -->
-                        <tr>
-                            <td align="center" style="padding: 40px; background-color: #F8FAFC; border-bottom-left-radius: 8px; border-bottom-right-radius: 8px;">
-                                <p style="margin: 0 0 10px 0; font-size: 12px; color: #475569; font-weight: bold; letter-spacing: 0.5px; font-family: 'Montserrat', sans-serif;">
-                                    &copy; 2026 ELEVN. Part of the La Neta ecosystem.
-                                </p>
-                                <p style="margin: 0; font-size: 12px; color: #94a3b8; line-height: 18px; font-family: 'Montserrat', sans-serif;">
-                                    You are receiving this email because you subscribed to our newsletter. <br>
-                                    Don't want to receive these? <a href="https://8640c0f1.sibforms.com/serve/MUIFAGqc4seCl9x6Rk8zoTq28okPUbUXFVH982BNJWGyIXp8ZDX0DRlwIepBFQ7LeXF5NZJvuuoWe3Cl4Q2fWLCl1mIIFh17Tu0u0Wwtizko9OwC6tqjjKT4SL5Plq0lOAdFO51S8fh9wCJ6PHJddLTjib0MkRopVev2RNJCJGFaapSn8Ig16lNj4b56uSHGIa3eXCFUo2LU4zoY" target="_blank" data-button-id="unsubscribe" style="color: #6641ed; text-decoration: underline;">Unsubscribe</a>
-                                </p>
-                            </td>
-                        </tr>
-
-                    </table>
+  <!-- ============================================
+       HERO SECTION
+       ============================================ -->
+  <tr>
+    <td style="background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #a855f7 100%); padding: 50px 40px 45px 40px; text-align:center;" class="section-padding">
+      <!--[if mso]>
+      <v:rect xmlns:v="urn:schemas-microsoft-com:vml" fill="true" stroke="false" style="width:600px;">
+        <v:fill type="gradient" color="#6366f1" color2="#a855f7" angle="135"/>
+        <v:textbox style="mso-fit-shape-to-text:true" inset="0,0,0,0">
+      <![endif]-->
+      <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+        <tr>
+          <td style="text-align:center; padding-bottom:12px;">
+            <span style="display:inline-block; background-color:rgba(255,255,255,0.2); color:#ffffff; font-family: Arial, Helvetica, sans-serif; font-size:12px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; padding:6px 16px; border-radius:20px;">
+              Now Live
+            </span>
+          </td>
+        </tr>
+        <tr>
+          <td style="font-family: Arial, Helvetica, sans-serif; font-size:32px; line-height:40px; font-weight:800; color:#ffffff; text-align:center; padding-bottom:16px;" class="hero-title">
+            Hey {{ extra.creator.first_name }},<br>meet LaNetaSend.me
+          </td>
+        </tr>
+        <tr>
+          <td style="font-family: Arial, Helvetica, sans-serif; font-size:16px; line-height:26px; color:rgba(255,255,255,0.9); text-align:center; padding: 0 10px 28px 10px;" class="hero-sub">
+            The platform that lets you send mass campaigns <strong style="color:#ffffff;">without spam risks or blocks</strong>, with hyper-personalization and full recipient tracking.
+          </td>
+        </tr>
+        <tr>
+          <td align="center">
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+              <tr>
+                <td style="border-radius:8px; background-color:#ffffff;" class="cta-button">
+                  <a href="https://LaNetaSend.me" data-button-id="hero-cta-get-started" target="_blank" style="display:inline-block; font-family: Arial, Helvetica, sans-serif; font-size:16px; font-weight:700; color:#6366f1; text-decoration:none; padding:14px 36px; border-radius:8px;">
+                    Get started &rarr;
+                  </a>
                 </td>
-            </tr>
-        </table>
-    </center>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+      <!--[if mso]>
+        </v:textbox>
+      </v:rect>
+      <![endif]-->
+    </td>
+  </tr>
+
+  <!-- ============================================
+       INTRO / PROBLEM-SOLUTION
+       ============================================ -->
+  <tr>
+    <td style="background-color:#ffffff; padding: 45px 40px 35px 40px;" class="dark-card section-padding">
+      <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+        <tr>
+          <td style="font-family: Arial, Helvetica, sans-serif; font-size:22px; line-height:30px; font-weight:700; color:#1a1a2e; text-align:center; padding-bottom:16px;" class="dark-text section-title">
+            Mass emails landing in spam?<br>Not anymore.
+          </td>
+        </tr>
+        <tr>
+          <td style="font-family: Arial, Helvetica, sans-serif; font-size:15px; line-height:24px; color:#555555; text-align:center; padding-bottom:10px;" class="dark-subtext section-subtitle">
+            LaNetaSend.me protects your sender reputation and subdomains while automating <strong>hyper-personalized</strong> campaigns with smart Round Robin distribution, dynamic variables, and real-time tracking.
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+
+  <!-- Subtle divider -->
+  <tr>
+    <td style="background-color:#ffffff; padding:0 40px;" class="dark-card padding">
+      <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+        <tr><td style="border-top: 1px solid #e5e7eb; font-size:1px; line-height:1px;">&nbsp;</td></tr>
+      </table>
+    </td>
+  </tr>
+
+  <!-- ============================================
+       FEATURES GRID (2 columns on desktop)
+       ============================================ -->
+  <tr>
+    <td style="background-color:#ffffff; padding: 35px 30px 10px 30px;" class="dark-card section-padding">
+      <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+        <tr>
+          <td style="font-family: Arial, Helvetica, sans-serif; font-size:12px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:#6366f1; text-align:center; padding-bottom:8px;">
+            Features
+          </td>
+        </tr>
+        <tr>
+          <td style="font-family: Arial, Helvetica, sans-serif; font-size:22px; line-height:28px; font-weight:700; color:#1a1a2e; text-align:center; padding-bottom:30px;" class="dark-text section-title">
+            Everything you need in one place
+          </td>
+        </tr>
+      </table>
+
+      <!-- Row 1 -->
+      <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+        <tr>
+          <td width="50%" valign="top" style="padding: 0 10px 24px 0;" class="feature-col">
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+              <tr>
+                <td style="background-color:#f5f3ff; border-radius:10px; padding:22px 18px;" class="dark-bg">
+                  <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                    <tr>
+                      <td style="font-size:28px; padding-bottom:10px;">&#128640;</td>
+                    </tr>
+                    <tr>
+                      <td style="font-family: Arial, Helvetica, sans-serif; font-size:15px; font-weight:700; color:#1a1a2e; padding-bottom:6px;" class="dark-text">Safe mass sending</td>
+                    </tr>
+                    <tr>
+                      <td style="font-family: Arial, Helvetica, sans-serif; font-size:13px; line-height:20px; color:#666666;" class="dark-subtext">Round Robin distribution across multiple senders to protect reputation and avoid blocks.</td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+          </td>
+          <td width="50%" valign="top" style="padding: 0 0 24px 10px;" class="feature-col">
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+              <tr>
+                <td style="background-color:#fdf2f8; border-radius:10px; padding:22px 18px;" class="dark-bg">
+                  <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                    <tr>
+                      <td style="font-size:28px; padding-bottom:10px;">&#127919;</td>
+                    </tr>
+                    <tr>
+                      <td style="font-family: Arial, Helvetica, sans-serif; font-size:15px; font-weight:700; color:#1a1a2e; padding-bottom:6px;" class="dark-text">Hyper-personalization</td>
+                    </tr>
+                    <tr>
+                      <td style="font-family: Arial, Helvetica, sans-serif; font-size:13px; line-height:20px; color:#666666;" class="dark-subtext">Dynamic variables in subject, preheader and body: name, platform, followers and more.</td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+
+      <!-- Row 2 -->
+      <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+        <tr>
+          <td width="50%" valign="top" style="padding: 0 10px 24px 0;" class="feature-col">
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+              <tr>
+                <td style="background-color:#ecfdf5; border-radius:10px; padding:22px 18px;" class="dark-bg">
+                  <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                    <tr>
+                      <td style="font-size:28px; padding-bottom:10px;">&#128202;</td>
+                    </tr>
+                    <tr>
+                      <td style="font-family: Arial, Helvetica, sans-serif; font-size:15px; font-weight:700; color:#1a1a2e; padding-bottom:6px;" class="dark-text">Real-time tracking</td>
+                    </tr>
+                    <tr>
+                      <td style="font-family: Arial, Helvetica, sans-serif; font-size:13px; line-height:20px; color:#666666;" class="dark-subtext">Opens, clicks, successful deliveries, and per-sender performance in a single dashboard.</td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+          </td>
+          <td width="50%" valign="top" style="padding: 0 0 24px 10px;" class="feature-col">
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+              <tr>
+                <td style="background-color:#fff7ed; border-radius:10px; padding:22px 18px;" class="dark-bg">
+                  <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                    <tr>
+                      <td style="font-size:28px; padding-bottom:10px;">&#128274;</td>
+                    </tr>
+                    <tr>
+                      <td style="font-family: Arial, Helvetica, sans-serif; font-size:15px; font-weight:700; color:#1a1a2e; padding-bottom:6px;" class="dark-text">Smart anti-spam</td>
+                    </tr>
+                    <tr>
+                      <td style="font-family: Arial, Helvetica, sans-serif; font-size:13px; line-height:20px; color:#666666;" class="dark-subtext">Mitigates spam risks, blocks, and bot activity that damages your domain reputation.</td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+
+      <!-- Row 3 -->
+      <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+        <tr>
+          <td width="50%" valign="top" style="padding: 0 10px 24px 0;" class="feature-col">
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+              <tr>
+                <td style="background-color:#eff6ff; border-radius:10px; padding:22px 18px;" class="dark-bg">
+                  <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                    <tr>
+                      <td style="font-size:28px; padding-bottom:10px;">&#128209;</td>
+                    </tr>
+                    <tr>
+                      <td style="font-family: Arial, Helvetica, sans-serif; font-size:15px; font-weight:700; color:#1a1a2e; padding-bottom:6px;" class="dark-text">Lists &amp; Segmentation</td>
+                    </tr>
+                    <tr>
+                      <td style="font-family: Arial, Helvetica, sans-serif; font-size:13px; line-height:20px; color:#666666;" class="dark-subtext">Create lists and segment by behavior: no opens, opened but no clicks, opened and clicked.</td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+          </td>
+          <td width="50%" valign="top" style="padding: 0 0 24px 10px;" class="feature-col">
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+              <tr>
+                <td style="background-color:#fefce8; border-radius:10px; padding:22px 18px;" class="dark-bg">
+                  <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                    <tr>
+                      <td style="font-size:28px; padding-bottom:10px;">&#9899;</td>
+                    </tr>
+                    <tr>
+                      <td style="font-family: Arial, Helvetica, sans-serif; font-size:15px; font-weight:700; color:#1a1a2e; padding-bottom:6px;" class="dark-text">QR codes with tracking</td>
+                    </tr>
+                    <tr>
+                      <td style="font-family: Arial, Helvetica, sans-serif; font-size:13px; line-height:20px; color:#666666;" class="dark-subtext">Generate custom QR codes and track daily scans directly from the platform.</td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+
+  <!-- ============================================
+       MID CTA
+       ============================================ -->
+  <tr>
+    <td style="background-color:#ffffff; padding: 10px 40px 45px 40px; text-align:center;" class="dark-card section-padding">
+      <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center">
+        <tr>
+          <td style="border-radius:8px; background-color:#6366f1;" class="cta-button">
+            <a href="https://LaNetaSend.me" data-button-id="mid-cta-explore" target="_blank" style="display:inline-block; font-family: Arial, Helvetica, sans-serif; font-size:15px; font-weight:700; color:#ffffff; text-decoration:none; padding:14px 32px; border-radius:8px;">
+              Explore the platform
+            </a>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+
+  <!-- ============================================
+       HOW IT WORKS (3 steps)
+       ============================================ -->
+  <tr>
+    <td style="background-color:#f8f7ff; padding: 45px 40px;" class="dark-bg section-padding">
+      <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+        <tr>
+          <td style="font-family: Arial, Helvetica, sans-serif; font-size:12px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:#6366f1; text-align:center; padding-bottom:8px;">
+            How it works
+          </td>
+        </tr>
+        <tr>
+          <td style="font-family: Arial, Helvetica, sans-serif; font-size:22px; line-height:28px; font-weight:700; color:#1a1a2e; text-align:center; padding-bottom:32px;" class="dark-text section-title">
+            3 steps to your first campaign
+          </td>
+        </tr>
+
+        <!-- Step 1 -->
+        <tr>
+          <td style="padding-bottom:24px;">
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+              <tr>
+                <td width="54" valign="top" class="step-icon">
+                  <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                    <tr>
+                      <td style="width:44px; height:44px; background-color:#6366f1; border-radius:50%; text-align:center; vertical-align:middle; font-family: Arial, Helvetica, sans-serif; font-size:18px; font-weight:800; color:#ffffff; line-height:44px;" class="step-icon">
+                        1
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+                <td valign="middle" style="padding-left:14px;" class="step-text">
+                  <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                    <tr>
+                      <td style="font-family: Arial, Helvetica, sans-serif; font-size:15px; font-weight:700; color:#1a1a2e;" class="dark-text step-title">Register your senders</td>
+                    </tr>
+                    <tr>
+                      <td style="font-family: Arial, Helvetica, sans-serif; font-size:13px; line-height:20px; color:#666666; padding-top:3px;" class="dark-subtext step-desc">Add one or multiple corporate email addresses. The system will rotate them via Round Robin.</td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- Step 2 -->
+        <tr>
+          <td style="padding-bottom:24px;">
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+              <tr>
+                <td width="54" valign="top" class="step-icon">
+                  <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                    <tr>
+                      <td style="width:44px; height:44px; background-color:#8b5cf6; border-radius:50%; text-align:center; vertical-align:middle; font-family: Arial, Helvetica, sans-serif; font-size:18px; font-weight:800; color:#ffffff; line-height:44px;" class="step-icon">
+                        2
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+                <td valign="middle" style="padding-left:14px;" class="step-text">
+                  <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                    <tr>
+                      <td style="font-family: Arial, Helvetica, sans-serif; font-size:15px; font-weight:700; color:#1a1a2e;" class="dark-text step-title">Create your personalized template</td>
+                    </tr>
+                    <tr>
+                      <td style="font-family: Arial, Helvetica, sans-serif; font-size:13px; line-height:20px; color:#666666; padding-top:3px;" class="dark-subtext step-desc">Use the template editor to insert personalized fields for each recipient—names, usernames, platforms, and more—so every message is tailored automatically.</td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- Step 3 -->
+        <tr>
+          <td>
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+              <tr>
+                <td width="54" valign="top" class="step-icon">
+                  <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                    <tr>
+                      <td style="width:44px; height:44px; background-color:#a855f7; border-radius:50%; text-align:center; vertical-align:middle; font-family: Arial, Helvetica, sans-serif; font-size:18px; font-weight:800; color:#ffffff; line-height:44px;" class="step-icon">
+                        3
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+                <td valign="middle" style="padding-left:14px;" class="step-text">
+                  <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                    <tr>
+                      <td style="font-family: Arial, Helvetica, sans-serif; font-size:15px; font-weight:700; color:#1a1a2e;" class="dark-text step-title">Launch &amp; monitor</td>
+                    </tr>
+                    <tr>
+                      <td style="font-family: Arial, Helvetica, sans-serif; font-size:13px; line-height:20px; color:#666666; padding-top:3px;" class="dark-subtext step-desc">Send your campaign and watch deliveries, opens, clicks and per-sender performance in real time.</td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+
+  <!-- ============================================
+       PERSONALIZATION (copy only — no variable-syntax examples in HTML)
+       ============================================ -->
+  <tr>
+    <td style="background-color:#ffffff; padding: 45px 40px;" class="dark-card section-padding">
+      <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+        <tr>
+          <td style="font-family: Arial, Helvetica, sans-serif; font-size:12px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:#6366f1; text-align:center; padding-bottom:8px;">
+            Personalization
+          </td>
+        </tr>
+        <tr>
+          <td style="font-family: Arial, Helvetica, sans-serif; font-size:20px; line-height:28px; font-weight:700; color:#1a1a2e; text-align:center; padding-bottom:8px;" class="dark-text section-title">
+            Every email is unique
+          </td>
+        </tr>
+        <tr>
+          <td style="font-family: Arial, Helvetica, sans-serif; font-size:14px; line-height:22px; color:#666666; text-align:center; padding-bottom:16px;" class="dark-subtext section-subtitle">
+            LaNetaSend.me fills each message with data from your audience: names, identifiers, social profiles, and custom fields you have stored for each creator.
+          </td>
+        </tr>
+        <tr>
+          <td style="font-family: Arial, Helvetica, sans-serif; font-size:14px; line-height:22px; color:#666666; text-align:center; padding-bottom:16px;" class="dark-subtext section-subtitle">
+            You write one template in the editor; when you send a campaign, the platform merges that template with each recipient so subject lines, preheaders, and the body speak to that person automatically.
+          </td>
+        </tr>
+        <tr>
+          <td style="font-family: Arial, Helvetica, sans-serif; font-size:14px; line-height:22px; color:#666666; text-align:center; padding-bottom:8px;" class="dark-subtext section-subtitle">
+            The exact fields you can use appear in the template editor and in the documentation inside your dashboard, so you always pick valid placeholders without guessing.
+          </td>
+        </tr>
+        <tr>
+          <td style="font-family: Arial, Helvetica, sans-serif; font-size:13px; color:#999999; text-align:center; padding-top:8px;" class="dark-subtext">
+            No code required—just compose, preview when available, and send.
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+
+  <!-- ============================================
+       EARLY ADOPTER BENEFITS (replaces metrics)
+       ============================================ -->
+  <tr>
+    <td style="background-color:#0f0f23; padding: 45px 30px;" class="section-padding">
+      <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+        <tr>
+          <td style="text-align:center; padding-bottom:8px;">
+            <span style="display:inline-block; background-color:rgba(168,85,247,0.2); color:#c4b5fd; font-family: Arial, Helvetica, sans-serif; font-size:11px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; padding:5px 14px; border-radius:20px;">
+              Early Access
+            </span>
+          </td>
+        </tr>
+        <tr>
+          <td style="font-family: Arial, Helvetica, sans-serif; font-size:22px; line-height:30px; font-weight:700; color:#ffffff; text-align:center; padding-bottom:10px;" class="section-title">
+            Be among the first to try it
+          </td>
+        </tr>
+        <tr>
+          <td style="font-family: Arial, Helvetica, sans-serif; font-size:14px; line-height:22px; color:rgba(255,255,255,0.6); text-align:center; padding-bottom:30px;" class="section-subtitle">
+            Join now and shape the future of email campaigns with us.
+          </td>
+        </tr>
+
+        <!-- Benefit 1 -->
+        <tr>
+          <td style="padding-bottom:20px;">
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+              <tr>
+                <td width="48" valign="top" class="step-icon">
+                  <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                    <tr>
+                      <td style="width:40px; height:40px; background-color:rgba(99,102,241,0.15); border-radius:10px; text-align:center; vertical-align:middle; font-size:22px; line-height:40px;">
+                        &#127881;
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+                <td valign="middle" style="padding-left:14px;" class="step-text">
+                  <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                    <tr>
+                      <td style="font-family: Arial, Helvetica, sans-serif; font-size:15px; font-weight:700; color:#ffffff;" class="step-title">Free access during beta</td>
+                    </tr>
+                    <tr>
+                      <td style="font-family: Arial, Helvetica, sans-serif; font-size:13px; line-height:20px; color:rgba(255,255,255,0.5); padding-top:3px;" class="step-desc">Use every feature at no cost while we refine the platform together.</td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- Benefit 2 -->
+        <tr>
+          <td style="padding-bottom:20px;">
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+              <tr>
+                <td width="48" valign="top" class="step-icon">
+                  <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                    <tr>
+                      <td style="width:40px; height:40px; background-color:rgba(139,92,246,0.15); border-radius:10px; text-align:center; vertical-align:middle; font-size:22px; line-height:40px;">
+                        &#128172;
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+                <td valign="middle" style="padding-left:14px;" class="step-text">
+                  <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                    <tr>
+                      <td style="font-family: Arial, Helvetica, sans-serif; font-size:15px; font-weight:700; color:#ffffff;" class="step-title">Direct line to our team</td>
+                    </tr>
+                    <tr>
+                      <td style="font-family: Arial, Helvetica, sans-serif; font-size:13px; line-height:20px; color:rgba(255,255,255,0.5); padding-top:3px;" class="step-desc">Your feedback will directly influence the roadmap &mdash; suggest features, report issues, and get priority support.</td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- Benefit 3 -->
+        <tr>
+          <td>
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+              <tr>
+                <td width="48" valign="top" class="step-icon">
+                  <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                    <tr>
+                      <td style="width:40px; height:40px; background-color:rgba(168,85,247,0.15); border-radius:10px; text-align:center; vertical-align:middle; font-size:22px; line-height:40px;">
+                        &#128142;
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+                <td valign="middle" style="padding-left:14px;" class="step-text">
+                  <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                    <tr>
+                      <td style="font-family: Arial, Helvetica, sans-serif; font-size:15px; font-weight:700; color:#ffffff;" class="step-title">Founding member perks</td>
+                    </tr>
+                    <tr>
+                      <td style="font-family: Arial, Helvetica, sans-serif; font-size:13px; line-height:20px; color:rgba(255,255,255,0.5); padding-top:3px;" class="step-desc">Early adopters will receive exclusive benefits and pricing when we launch publicly.</td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+
+  <!-- ============================================
+       FINAL CTA
+       ============================================ -->
+  <tr>
+    <td style="background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%); padding: 45px 40px; text-align:center;" class="section-padding">
+      <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+        <tr>
+          <td style="font-family: Arial, Helvetica, sans-serif; font-size:22px; line-height:30px; font-weight:700; color:#ffffff; text-align:center; padding-bottom:12px;" class="section-title">
+            {{ extra.creator.first_name }}, take your campaigns to the next level
+          </td>
+        </tr>
+        <tr>
+          <td style="font-family: Arial, Helvetica, sans-serif; font-size:15px; line-height:24px; color:rgba(255,255,255,0.85); text-align:center; padding-bottom:28px;" class="section-subtitle">
+            Start today &mdash; protect your reputation, personalize every message, and measure every result.
+          </td>
+        </tr>
+        <tr>
+          <td align="center">
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+              <tr>
+                <td style="border-radius:8px; background-color:#ffffff;" class="cta-button">
+                  <a href="https://LaNetaSend.me" data-button-id="footer-cta-signup" target="_blank" style="display:inline-block; font-family: Arial, Helvetica, sans-serif; font-size:16px; font-weight:700; color:#6366f1; text-decoration:none; padding:14px 40px; border-radius:8px;">
+                    Create my free account
+                  </a>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+
+  <!-- ============================================
+       FOOTER
+       ============================================ -->
+  <tr>
+    <td style="background-color:#0f0f23; padding: 35px 40px; border-radius: 0 0 12px 12px;" class="section-padding footer-padding">
+      <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+        <!-- Logo + brand name footer -->
+        <tr>
+          <td align="center" style="padding-bottom:16px;">
+            <a href="https://elevn.me" data-button-id="footer-logo" target="_blank" style="text-decoration:none;">
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                <tr>
+                  <td valign="middle" style="padding-right:10px;">
+                    <img src="https://elevn.me/assets/images/elevn.png" width="32" alt="ELEVN" style="display:block; max-width:32px; height:auto;" />
+                  </td>
+                  <td valign="middle">
+                    <span style="font-family: Arial, Helvetica, sans-serif; font-size:20px; font-weight:800; color:#ffffff; letter-spacing:2px;">ELEVN</span>
+                  </td>
+                </tr>
+              </table>
+            </a>
+          </td>
+        </tr>
+        <tr>
+          <td style="font-family: Arial, Helvetica, sans-serif; font-size:13px; color:rgba(255,255,255,0.5); text-align:center; padding-bottom:6px;">
+            Sent by <strong style="color:rgba(255,255,255,0.7);">{{ sender_name }}</strong> via
+            <a href="https://LaNetaSend.me" data-button-id="footer-elevnmail-link" target="_blank" style="color:#a855f7; text-decoration:underline;">LaNetaSend.me</a>
+          </td>
+        </tr>
+        <tr>
+          <td style="font-family: Arial, Helvetica, sans-serif; font-size:12px; color:rgba(255,255,255,0.35); text-align:center; padding-bottom:16px;">
+            This email was sent to {{ email }}
+          </td>
+        </tr>
+        <!-- Divider -->
+        <tr>
+          <td style="padding-bottom:16px;">
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+              <tr><td style="border-top: 1px solid rgba(255,255,255,0.1); font-size:1px; line-height:1px;">&nbsp;</td></tr>
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td style="font-family: Arial, Helvetica, sans-serif; font-size:12px; color:rgba(255,255,255,0.35); text-align:center; line-height:20px;">
+            <a href="https://elevn.me" data-button-id="footer-elevn-site" target="_blank" style="color:rgba(255,255,255,0.5); text-decoration:underline;">elevn.me</a>
+            &nbsp;&bull;&nbsp;
+            <a href="https://LaNetaSend.me" data-button-id="footer-elevnmail-site" target="_blank" style="color:rgba(255,255,255,0.5); text-decoration:underline;">LaNetaSend.me</a>
+          </td>
+        </tr>
+        <!-- Unsubscribe -->
+        <tr>
+          <td style="font-family: Arial, Helvetica, sans-serif; font-size:12px; color:rgba(255,255,255,0.3); text-align:center; padding-top:14px; line-height:20px;">
+            Don't want to receive these emails anymore?<br>
+            <a href="{{ unsubscribe_url_with_email }}" data-button-id="footer-unsubscribe" target="_blank" style="color:rgba(255,255,255,0.5); text-decoration:underline;">Unsubscribe</a>
+          </td>
+        </tr>
+        <tr>
+          <td style="font-family: Arial, Helvetica, sans-serif; font-size:11px; color:rgba(255,255,255,0.25); text-align:center; padding-top:12px;">
+            &copy; 2026 ELEVN. All rights reserved.
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+
+</table>
+<!-- /Container 600px -->
+
+</td>
+</tr>
+</table>
+<!-- /Wrapper -->
+
 </body>
 </html>

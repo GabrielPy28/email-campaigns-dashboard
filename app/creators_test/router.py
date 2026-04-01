@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import uuid
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
-from sqlalchemy import String, cast, or_
+from sqlalchemy import String, and_, cast, false, func, or_
 from sqlalchemy.orm import Session
 
 from app.core.security import get_current_user
@@ -19,6 +20,7 @@ from app.creators.io_helpers import (
 )
 from app.creators.schemas import CreatorCreate, CreatorRead, CreatorUpdate
 from app.creators_test.service import (
+    apply_account_profiles_payload_to_creator_test,
     create_creator_strict,
     creator_to_read,
     upsert_creator_from_payload,
@@ -31,6 +33,36 @@ from app.lists.creator_utils import apply_creator_fields
 creators_test_router = APIRouter(prefix="/creadores-test", tags=["creadores-test"])
 
 
+def _nonblank(col):
+    return and_(col.isnot(None), func.length(func.trim(col)) > 0)
+
+
+def _creator_test_platform_clause(db: Session, platform_id: uuid.UUID):
+    """Misma semántica que el filtro en cliente: cuenta presente si hay usuario o URL no vacíos."""
+    plat = db.query(models.Platform).filter(models.Platform.id == platform_id).first()
+    if plat is None:
+        return None
+    n = (plat.nombre or "").lower()
+    if "instagram" in n:
+        return or_(
+            _nonblank(models.CreatorTest.instagram_username),
+            _nonblank(models.CreatorTest.instagram_url),
+        )
+    if "tiktok" in n:
+        return or_(
+            _nonblank(models.CreatorTest.tiktok_username),
+            _nonblank(models.CreatorTest.tiktok_url),
+        )
+    if "youtube" in n:
+        return or_(
+            _nonblank(models.CreatorTest.youtube_channel),
+            _nonblank(models.CreatorTest.youtube_channel_url),
+        )
+    if "facebook" in n:
+        return _nonblank(models.CreatorTest.facebook_page)
+    return None
+
+
 def _get_creator_or_404(db: Session, creator_id: uuid.UUID) -> models.CreatorTest:
     c = db.query(models.CreatorTest).filter(models.CreatorTest.id == creator_id).first()
     if not c:
@@ -40,16 +72,21 @@ def _get_creator_or_404(db: Session, creator_id: uuid.UUID) -> models.CreatorTes
 
 @creators_test_router.get("/", response_model=list[CreatorRead])
 def list_creators_test(
+    response: Response,
     db: Session = Depends(get_db),
     _: dict = Depends(get_current_user),
     skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=500),
+    limit: int = Query(100, ge=1, le=1000),
     search: str | None = Query(None, description="Buscar en email, nombre, username o ID (contiene)"),
     id_contains: str | None = Query(None),
     email_contains: str | None = Query(None),
     first_name_contains: str | None = Query(None),
     last_name_contains: str | None = Query(None),
     username_contains: str | None = Query(None),
+    platform_ids: Annotated[
+        list[uuid.UUID] | None,
+        Query(description="Creadores con datos en todas estas plataformas (columnas planas)"),
+    ] = None,
     facebook_page_contains: str | None = Query(None),
     status: str | None = Query(None, description="ignorado en test: no hay columna status en creators_test"),
     min_campaigns: int | None = Query(None, ge=0),
@@ -91,8 +128,24 @@ def list_creators_test(
             models.CreatorTest.facebook_page.ilike(f"%{facebook_page_contains.strip()}%")
         )
 
+    if platform_ids:
+        for pid in platform_ids:
+            clause = _creator_test_platform_clause(db, pid)
+            if clause is None:
+                q = q.filter(false())
+                break
+            q = q.filter(clause)
+
+    subq = (
+        q.with_entities(models.CreatorTest.id)
+        .distinct()
+        .subquery(name="creators_test_filtered_ids")
+    )
+    n = db.query(func.count()).select_from(subq).scalar()
+    total = int(n or 0)
+    response.headers["X-Total-Count"] = str(total)
     rows = q.order_by(models.CreatorTest.email.asc()).offset(skip).limit(limit).all()
-    return [creator_to_read(c) for c in rows]
+    return [creator_to_read(db, c) for c in rows]
 
 
 @creators_test_router.get("/{creator_id}", response_model=CreatorRead)
@@ -105,7 +158,7 @@ def get_creator_test(
         cid = uuid.UUID(creator_id)
     except ValueError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Creador de prueba no encontrado")
-    return creator_to_read(_get_creator_or_404(db, cid))
+    return creator_to_read(db, _get_creator_or_404(db, cid))
 
 
 @creators_test_router.post("/", response_model=CreatorRead, status_code=status.HTTP_201_CREATED)
@@ -123,7 +176,7 @@ def register_creator_master_test(
         )
     db.commit()
     db.refresh(c)
-    return creator_to_read(c)
+    return creator_to_read(db, c)
 
 
 def _apply_creator_update_test(
@@ -132,8 +185,9 @@ def _apply_creator_update_test(
     payload: CreatorUpdate,
 ) -> CreatorRead:
     data = {k: v for k, v in payload.model_dump(exclude_unset=True).items()}
-    if not data:
-        return creator_to_read(creator)
+    account_profiles = data.pop("account_profiles", None)
+    if not data and account_profiles is None:
+        return creator_to_read(db, creator)
     if "email" in data and data["email"] != creator.email:
         taken = (
             db.query(models.CreatorTest)
@@ -148,10 +202,28 @@ def _apply_creator_update_test(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Ya existe otro creador de prueba con ese email.",
             )
-    apply_creator_fields(creator, **data)
+    if data:
+        apply_creator_fields(creator, **data)
+    if account_profiles is not None:
+        try:
+            apply_account_profiles_payload_to_creator_test(db, creator, account_profiles)
+        except ValueError as e:
+            msg = str(e)
+            if msg.startswith("platform_not_found"):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Una o más plataformas no existen.",
+                )
+            if msg == "account_profiles_need_username_or_url":
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Cada cuenta guardada debe incluir usuario o URL del perfil. "
+                    "Indica al menos una plataforma con uno de esos datos.",
+                )
+            raise
     db.commit()
     db.refresh(creator)
-    return creator_to_read(creator)
+    return creator_to_read(db, creator)
 
 
 @creators_test_router.patch("/{creator_id}", response_model=CreatorRead)

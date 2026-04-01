@@ -57,6 +57,10 @@ class CampaignCreate(CampaignBase):
         default=None,
         description="UUIDs de creadores registrados; se usa creator_to_campaign_recipient por fila.",
     )
+    segmentation_id: UUID | None = Field(
+        default=None,
+        description="UUID de segmentación existente para usar sus creadores como destinatarios.",
+    )
 
     @field_validator("creator_ids")
     @classmethod
@@ -72,10 +76,11 @@ class CampaignCreate(CampaignBase):
         has_list = self.list_id is not None
         has_recip = bool(self.recipients and len(self.recipients) > 0)
         has_creators = bool(self.creator_ids and len(self.creator_ids) > 0)
-        n = sum(1 for x in (has_list, has_recip, has_creators) if x)
+        has_segmentation = self.segmentation_id is not None
+        n = sum(1 for x in (has_list, has_recip, has_creators, has_segmentation) if x)
         if n != 1:
             raise ValueError(
-                "Indique exactamente un origen de destinatarios: list_id, recipients (no vacío) o creator_ids (no vacío)."
+                "Indique exactamente un origen de destinatarios: list_id, recipients (no vacío), creator_ids (no vacío) o segmentation_id."
             )
         return self
 
@@ -117,6 +122,10 @@ class CampaignRead(CampaignBase):
     list_id: str | None = Field(
         default=None,
         description="Lista de creadores usada al crear la campaña (si aplica).",
+    )
+    segmentation_id: str | None = Field(
+        default=None,
+        description="Segmentación usada al crear la campaña (si aplica).",
     )
     sender_id: str = Field(..., description="Remitente principal (primero de la lista)")
     sender_name: str = Field(..., description="Nombre del remitente principal")

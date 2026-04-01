@@ -1,9 +1,14 @@
 import os
 import uuid
 from datetime import datetime
+from enum import Enum
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import Response
+
+from app.core.security import get_current_user
+from app.reports.campaign_detail_export import build_campaign_detail_export
 from sqlalchemy import desc, func
 from sqlalchemy.orm import Session
 from app.core.client_ip import is_public_routable_ip
@@ -29,6 +34,58 @@ from app.reports.models import (
 
 
 reports_router = APIRouter(prefix="/reports", tags=["reports"])
+
+
+class CampaignDetailExportFormat(str, Enum):
+    xlsx = "xlsx"
+    csv = "csv"
+
+
+class CampaignDetailExportSection(str, Enum):
+    full = "full"
+    resumen = "resumen"
+    actividad_destinatarios = "actividad_destinatarios"
+    dispositivos = "dispositivos"
+    clics_boton = "clics_boton"
+    brevo_interno = "brevo_interno"
+    remitente = "remitente"
+
+
+@reports_router.get("/campaigns/{campaign_id}/export/detail")
+def export_campaign_detail(
+    campaign_id: str,
+    export_format: CampaignDetailExportFormat = Query(
+        CampaignDetailExportFormat.xlsx, alias="format"
+    ),
+    section: CampaignDetailExportSection = Query(CampaignDetailExportSection.full),
+    db: Session = Depends(get_db),
+    _: dict = Depends(get_current_user),
+):
+    """
+    Descarga resultados de la campaña: KPIs, actividad por destinatario, dispositivos,
+    clics por botón, comparativa Brevo/interno y datos del radar del remitente.
+    Formato `csv` + sección `full` devuelve un ZIP con varios CSV (UTF-8 con BOM, separador `;`).
+    """
+    try:
+        body, media_type, filename = build_campaign_detail_export(
+            db,
+            campaign_id,
+            export_format.value,
+            section.value,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
+    return Response(
+        content=body,
+        media_type=media_type,
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+        },
+    )
 
 
 @reports_router.get(

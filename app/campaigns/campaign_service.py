@@ -56,6 +56,7 @@ def _campaign_to_read(c: models.Campaign) -> CampaignRead:
         created_by=c.created_by,
         created_at=c.created_at,
         list_id=str(c.list_id) if c.list_id else None,
+        segmentation_id=str(c.segmentation_id) if c.segmentation_id else None,
         recipients=recipients,
     )
 
@@ -95,6 +96,7 @@ def create_campaign(
 
     creators_from_list: list[models.Creator] | None = None
     creators_by_ids: list[models.Creator] | None = None
+    creators_from_segmentation: list[models.Creator] | None = None
     if payload.list_id is not None:
         lista = (
             db.query(models.Lista)
@@ -114,7 +116,15 @@ def create_campaign(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="La lista no tiene creadores. Añada creadores en POST /listas/{id}/recipients o CSV.",
             )
-        creators_from_list = sorted(lista.creators, key=lambda c: c.email.lower())
+        all_in_list = sorted(lista.creators, key=lambda c: c.email.lower())
+        creators_from_list = [
+            c for c in all_in_list if (c.status or "activo") == "activo"
+        ]
+        if not creators_from_list:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Ningún creador de la lista está activo. Reactiva perfiles en el directorio o actualiza la lista.",
+            )
     elif payload.creator_ids is not None:
         uuids = list(payload.creator_ids)
         found = (
@@ -130,8 +140,41 @@ def create_campaign(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Creador(es) no encontrado(s): {', '.join(missing)}",
             )
+        inactive = [c for c in found if (c.status or "activo") != "activo"]
+        if inactive:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Hay creadores inactivos que no pueden incluirse en campañas: "
+                + ", ".join(c.email for c in inactive),
+            )
         order = {uid: i for i, uid in enumerate(uuids)}
         creators_by_ids = sorted(found, key=lambda c: order.get(c.id, 10**9))
+    elif payload.segmentation_id is not None:
+        seg = (
+            db.query(models.Segmentation)
+            .options(joinedload(models.Segmentation.creators))
+            .filter(models.Segmentation.id == payload.segmentation_id)
+            .first()
+        )
+        if not seg:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Segmentación no encontrada.",
+            )
+        if not seg.creators:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="La segmentación no tiene creadores.",
+            )
+        all_seg = sorted(seg.creators, key=lambda c: c.email.lower())
+        creators_from_segmentation = [
+            c for c in all_seg if (c.status or "activo") == "activo"
+        ]
+        if not creators_from_segmentation:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Ningún creador de la segmentación está activo.",
+            )
 
     db_campaign = models.Campaign(
         name=payload.name,
@@ -145,6 +188,7 @@ def create_campaign(
         wait_max_seconds=payload.wait_max_seconds,
         created_by=created_by,
         list_id=payload.list_id,
+        segmentation_id=payload.segmentation_id,
     )
     db.add(db_campaign)
     db.flush()
@@ -157,6 +201,9 @@ def create_campaign(
             db.add(creator_to_campaign_recipient(db_campaign.id, creator))
     elif creators_by_ids is not None:
         for creator in creators_by_ids:
+            db.add(creator_to_campaign_recipient(db_campaign.id, creator))
+    elif creators_from_segmentation is not None:
+        for creator in creators_from_segmentation:
             db.add(creator_to_campaign_recipient(db_campaign.id, creator))
     else:
         for r in payload.recipients or []:
