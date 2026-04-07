@@ -29,6 +29,7 @@ import {
   fetchPlatforms,
   fetchListas,
   fetchListasTest,
+  createLista,
   createListaTest,
   linkCreatorToLista,
   linkCreatorToListaTest,
@@ -50,6 +51,10 @@ import {
   downloadCreadoresPlantillaCsv,
   downloadCreadoresPlantillaXlsx,
 } from "../../lib/creadoresBulkLayout";
+import {
+  downloadCreatorsSelectionCsv,
+  downloadCreatorsSelectionXlsx,
+} from "../../lib/creadoresExport";
 import Swal from "sweetalert2";
 import {
   HiOutlineChevronDown,
@@ -978,13 +983,14 @@ export function CreadoresPage({ mode = "production" }: { mode?: CreadoresPageMod
   } | null>(null);
 
   const [addToOpen, setAddToOpen] = useState(false);
+  const [exportSelectionOpen, setExportSelectionOpen] = useState(false);
   const [addToListSearch, setAddToListSearch] = useState("");
-  const [createListaPruebaOpen, setCreateListaPruebaOpen] = useState(false);
-  const [createListaPruebaNombre, setCreateListaPruebaNombre] = useState("");
-  const [createListaPruebaStatus, setCreateListaPruebaStatus] = useState<ListOption | null>(
+  const [createListaSelectionOpen, setCreateListaSelectionOpen] = useState(false);
+  const [createListaSelectionNombre, setCreateListaSelectionNombre] = useState("");
+  const [createListaSelectionStatus, setCreateListaSelectionStatus] = useState<ListOption | null>(
     () => LISTA_STATUS_MODAL[0]
   );
-  const [createListaPruebaSaving, setCreateListaPruebaSaving] = useState(false);
+  const [createListaSelectionSaving, setCreateListaSelectionSaving] = useState(false);
   const [listasCatalog, setListasCatalog] = useState<ListaRead[]>([]);
   const [listasLoading, setListasLoading] = useState(false);
   const [listasLoadError, setListasLoadError] = useState<string | null>(null);
@@ -993,6 +999,7 @@ export function CreadoresPage({ mode = "production" }: { mode?: CreadoresPageMod
   const xlsxInputRef = useRef<HTMLInputElement>(null);
   const csvInputRef = useRef<HTMLInputElement>(null);
   const addToRef = useRef<HTMLDivElement>(null);
+  const exportSelectionRef = useRef<HTMLDivElement>(null);
 
   const resetRegisterModalState = useCallback(() => {
     setRegisterModalOpen(false);
@@ -1269,28 +1276,72 @@ export function CreadoresPage({ mode = "production" }: { mode?: CreadoresPageMod
     setSelected(new Set());
   }, [selected, isPruebas]);
 
-  const handleCreateListaPruebaSubmit = async (e: FormEvent) => {
+  const handleExportSelection = useCallback(
+    async (format: "csv" | "xlsx") => {
+      const ids = Array.from(selected);
+      if (ids.length === 0) return;
+      setExportSelectionOpen(false);
+      void Swal.fire({
+        title: "Preparando exportación…",
+        html: `Obteniendo datos de <strong>${ids.length}</strong> creador(es).`,
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+        showConfirmButton: false,
+        didOpen: () => {
+          Swal.showLoading();
+        },
+      });
+      try {
+        const rows = await Promise.all(
+          ids.map(async (id) => {
+            if (!isPruebas) {
+              const fromPage = creatorsRaw.find((c) => c.id === id);
+              if (fromPage) return fromPage;
+              return fetchCreator(id);
+            }
+            return fetchCreatorTest(id);
+          })
+        );
+        const base = isPruebas ? "creadores_prueba_seleccion" : "creadores_seleccion";
+        if (format === "csv") downloadCreatorsSelectionCsv(rows, base);
+        else downloadCreatorsSelectionXlsx(rows, base);
+        Swal.close();
+      } catch (e) {
+        Swal.close();
+        void Swal.fire({
+          icon: "error",
+          title: "No se pudo exportar",
+          text: e instanceof Error ? e.message : "Error desconocido.",
+          confirmButtonColor: "#7c3aed",
+        });
+      }
+    },
+    [selected, isPruebas, creatorsRaw]
+  );
+
+  const handleCreateListaSelectionSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!isPruebas) return;
-    const nombre = createListaPruebaNombre.trim();
+    const nombre = createListaSelectionNombre.trim();
     if (!nombre) {
       void Swal.fire({
         icon: "warning",
         title: "Nombre requerido",
-        text: "Indica un nombre para la nueva lista de prueba.",
+        text: isPruebas
+          ? "Indica un nombre para la nueva lista de prueba."
+          : "Indica un nombre para la nueva lista.",
         confirmButtonColor: "#7c3aed",
       });
       return;
     }
     const ids = Array.from(selected);
     if (ids.length === 0) {
-      setCreateListaPruebaOpen(false);
+      setCreateListaSelectionOpen(false);
       return;
     }
 
-    setCreateListaPruebaSaving(true);
+    setCreateListaSelectionSaving(true);
     void Swal.fire({
-      title: "Creando lista de prueba…",
+      title: isPruebas ? "Creando lista de prueba…" : "Creando lista…",
       html: `Creando la lista y asociando <strong>${ids.length}</strong> creador(es) seleccionado(s).`,
       allowOutsideClick: false,
       allowEscapeKey: false,
@@ -1301,8 +1352,10 @@ export function CreadoresPage({ mode = "production" }: { mode?: CreadoresPageMod
     });
 
     try {
-      const st = (createListaPruebaStatus?.value ?? "activo") as "activo" | "inactivo";
-      const lista = await createListaTest({ nombre, status: st });
+      const st = (createListaSelectionStatus?.value ?? "activo") as "activo" | "inactivo";
+      const lista = isPruebas
+        ? await createListaTest({ nombre, status: st })
+        : await createLista({ nombre, status: st });
       setListasCatalog((prev) => {
         const rest = prev.filter((l) => l.id !== lista.id);
         return [lista, ...rest];
@@ -1311,9 +1364,10 @@ export function CreadoresPage({ mode = "production" }: { mode?: CreadoresPageMod
       let added = 0;
       let already = 0;
       const errors: string[] = [];
+      const linkFn = isPruebas ? linkCreatorToListaTest : linkCreatorToLista;
       for (const creatorId of ids) {
         try {
-          const r = await linkCreatorToListaTest(lista.id, creatorId);
+          const r = await linkFn(lista.id, creatorId);
           if (r.linked) added += 1;
           else already += 1;
         } catch (err) {
@@ -1334,6 +1388,7 @@ export function CreadoresPage({ mode = "production" }: { mode?: CreadoresPageMod
       const icon: "success" | "warning" | "error" =
         errors.length === ids.length ? "error" : errors.length > 0 ? "warning" : "success";
 
+      const successTitle = isPruebas ? "Lista de prueba lista" : "Lista creada";
       await Swal.fire({
         icon,
         title:
@@ -1341,15 +1396,15 @@ export function CreadoresPage({ mode = "production" }: { mode?: CreadoresPageMod
             ? "Lista creada; no se pudieron asociar creadores"
             : errors.length > 0
               ? "Lista creada con avisos"
-              : "Lista de prueba lista",
+              : successTitle,
         html: `<p>Lista: <strong>${lista.nombre}</strong></p><p class="text-sm text-slate-600">Nuevos en la lista: <strong>${added}</strong> · Ya estaban: <strong>${already}</strong></p>${errHtml}`,
         confirmButtonText: "Aceptar",
         confirmButtonColor: "#7c3aed",
       });
 
-      setCreateListaPruebaOpen(false);
-      setCreateListaPruebaNombre("");
-      setCreateListaPruebaStatus(LISTA_STATUS_MODAL[0]);
+      setCreateListaSelectionOpen(false);
+      setCreateListaSelectionNombre("");
+      setCreateListaSelectionStatus(LISTA_STATUS_MODAL[0]);
       setAddToOpen(false);
       setSelected(new Set());
     } catch (err) {
@@ -1361,7 +1416,7 @@ export function CreadoresPage({ mode = "production" }: { mode?: CreadoresPageMod
         confirmButtonColor: "#7c3aed",
       });
     } finally {
-      setCreateListaPruebaSaving(false);
+      setCreateListaSelectionSaving(false);
     }
   };
 
@@ -1375,6 +1430,12 @@ export function CreadoresPage({ mode = "production" }: { mode?: CreadoresPageMod
       }
       if (addToRef.current && !addToRef.current.contains(e.target as Node)) {
         setAddToOpen(false);
+      }
+      if (
+        exportSelectionRef.current &&
+        !exportSelectionRef.current.contains(e.target as Node)
+      ) {
+        setExportSelectionOpen(false);
       }
     }
     document.addEventListener("mousedown", handleClick);
@@ -1699,7 +1760,11 @@ export function CreadoresPage({ mode = "production" }: { mode?: CreadoresPageMod
   }, [selected, reloadCreators, isPruebas]);
 
   useEffect(() => {
-    if (selectedCount === 0) setAddToOpen(false);
+    if (selectedCount === 0) {
+      setAddToOpen(false);
+      setExportSelectionOpen(false);
+      setCreateListaSelectionOpen(false);
+    }
   }, [selectedCount]);
 
   useEffect(() => {
@@ -2098,28 +2163,26 @@ export function CreadoresPage({ mode = "production" }: { mode?: CreadoresPageMod
                       <p className="mt-0.5 text-[10px] text-slate-500">
                         {isPruebas
                           ? "Crea una lista nueva o elige una existente; todo queda en listas-test."
-                          : "Busca entre muchas listas; la lista hace scroll."}
+                          : "Crea una lista nueva desde aquí o elige una existente; busca por nombre o ID."}
                       </p>
                     </div>
-                    {isPruebas && (
-                      <div className="shrink-0 border-b border-pink-100 bg-gradient-to-r from-pink/[0.08] to-purple/[0.06] px-3 py-2.5">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setCreateListaPruebaOpen(true);
-                            setAddToOpen(false);
-                          }}
-                          className="flex w-full items-center gap-2 rounded-lg border border-pink-200/80 bg-white/90 px-3 py-2 text-left text-sm font-semibold text-slate-800 shadow-sm transition hover:border-purple/30 hover:bg-white"
-                        >
-                          <HiOutlinePlusCircle className="h-5 w-5 shrink-0 text-pink-600" />
-                          <span>
-                            Nueva lista de prueba y agregar{" "}
-                            <span className="tabular-nums text-purple">{selectedCount}</span>{" "}
-                            seleccionado(s)
-                          </span>
-                        </button>
-                      </div>
-                    )}
+                    <div className="shrink-0 border-b border-pink-100 bg-gradient-to-r from-pink/[0.08] to-purple/[0.06] px-3 py-2.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCreateListaSelectionOpen(true);
+                          setAddToOpen(false);
+                        }}
+                        className="flex w-full items-center gap-2 rounded-lg border border-pink-200/80 bg-white/90 px-3 py-2 text-left text-sm font-semibold text-slate-800 shadow-sm transition hover:border-purple/30 hover:bg-white"
+                      >
+                        <HiOutlinePlusCircle className="h-5 w-5 shrink-0 text-pink-600" />
+                        <span>
+                          {isPruebas ? "Nueva lista de prueba" : "Nueva lista"} y agregar{" "}
+                          <span className="tabular-nums text-purple">{selectedCount}</span>{" "}
+                          seleccionado(s)
+                        </span>
+                      </button>
+                    </div>
                     <div className="shrink-0 border-b border-slate-100 p-2">
                       <div className="relative">
                         <HiOutlineMagnifyingGlass className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -2150,7 +2213,7 @@ export function CreadoresPage({ mode = "production" }: { mode?: CreadoresPageMod
                           {listasCatalog.length === 0
                             ? isPruebas
                               ? "No hay listas de prueba aún. Usa el botón de arriba para crear una."
-                              : "No hay listas creadas. Crea una en la página Listas."
+                              : "No hay listas aún. Usa «Nueva lista» arriba o crea una en la página Listas."
                             : "Ninguna lista coincide con la búsqueda."}
                         </li>
                       ) : (
@@ -2178,6 +2241,58 @@ export function CreadoresPage({ mode = "production" }: { mode?: CreadoresPageMod
                         : `${listasFiltradasAgregar.length} de ${listasCatalog.length} listas`}
                       {addToListSearch.trim() ? " (filtrado)" : ""}
                     </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {selectedCount > 0 && (
+              <div className="relative" ref={exportSelectionRef}>
+                <button
+                  type="button"
+                  onClick={() => setExportSelectionOpen((v) => !v)}
+                  className={cn(
+                    "inline-flex items-center gap-2 rounded-xl border border-sky-200 bg-gradient-to-r from-sky-50/90 to-indigo-50/80 px-4 py-2.5 text-sm font-semibold text-slate-900 shadow-sm",
+                    "hover:border-sky-300 hover:shadow-md"
+                  )}
+                >
+                  <HiOutlineArrowDownTray className="h-4 w-4 text-sky-600" />
+                  Exportar selección
+                  <span className="rounded-full bg-white/80 px-2 py-0.5 text-xs font-bold text-sky-800">
+                    {selectedCount}
+                  </span>
+                  <HiOutlineChevronDown
+                    className={cn(
+                      "h-4 w-4 text-slate-500 transition",
+                      exportSelectionOpen && "rotate-180"
+                    )}
+                  />
+                </button>
+                {exportSelectionOpen && (
+                  <div className="absolute left-0 top-full z-[100] mt-1.5 min-w-[220px] overflow-hidden rounded-xl border border-slate-200/90 bg-white py-1 shadow-xl shadow-slate-300/50">
+                    <p className="border-b border-slate-100 px-4 py-2 text-[11px] font-medium text-slate-500">
+                      Descargar todos los datos de los creadores marcados
+                    </p>
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-slate-700 hover:bg-purple/5 hover:text-purple"
+                      onClick={() => void handleExportSelection("csv")}
+                    >
+                      <span className="rounded bg-sky-50 px-1.5 py-0.5 text-[10px] font-bold text-sky-700">
+                        CSV
+                      </span>
+                      Archivo CSV (.csv)
+                    </button>
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-slate-700 hover:bg-purple/5 hover:text-purple"
+                      onClick={() => void handleExportSelection("xlsx")}
+                    >
+                      <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">
+                        XLSX
+                      </span>
+                      Excel (.xlsx)
+                    </button>
                   </div>
                 )}
               </div>
@@ -2428,19 +2543,19 @@ export function CreadoresPage({ mode = "production" }: { mode?: CreadoresPageMod
           </div>
         </div>
 
-        {isPruebas && createListaPruebaOpen && (
+        {createListaSelectionOpen && (
           <div
             className="fixed inset-0 z-[210] flex items-center justify-center p-4"
             role="dialog"
             aria-modal="true"
-            aria-labelledby="create-lista-prueba-title"
+            aria-labelledby="create-lista-selection-title"
           >
             <button
               type="button"
               aria-label="Cerrar"
               className="absolute inset-0 z-0 bg-slate-900/45 backdrop-blur-[2px]"
               onClick={() => {
-                if (!createListaPruebaSaving) setCreateListaPruebaOpen(false);
+                if (!createListaSelectionSaving) setCreateListaSelectionOpen(false);
               }}
             />
             <div
@@ -2448,51 +2563,61 @@ export function CreadoresPage({ mode = "production" }: { mode?: CreadoresPageMod
               onMouseDown={(e) => e.stopPropagation()}
             >
               <h2
-                id="create-lista-prueba-title"
+                id="create-lista-selection-title"
                 className="text-lg font-bold tracking-tight text-slate-900"
               >
-                Nueva lista de prueba
+                {isPruebas ? "Nueva lista de prueba" : "Nueva lista"}
               </h2>
               <p className="mt-2 text-sm leading-relaxed text-slate-600">
-                Se creará en{" "}
-                <code className="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-800">
-                  listas-test
-                </code>{" "}
-                y se añadirán los{" "}
-                <strong className="text-slate-800">{selectedCount}</strong> creador(es) que tienes
-                seleccionados.
+                {isPruebas ? (
+                  <>
+                    Se creará en{" "}
+                    <code className="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-800">
+                      listas-test
+                    </code>{" "}
+                    y se añadirán los{" "}
+                    <strong className="text-slate-800">{selectedCount}</strong> creador(es) que
+                    tienes seleccionados.
+                  </>
+                ) : (
+                  <>
+                    Se registrará una lista de producción y se añadirán los{" "}
+                    <strong className="text-slate-800">{selectedCount}</strong> creador(es)
+                    seleccionados.
+                  </>
+                )}
               </p>
               <form
-                onSubmit={(e) => void handleCreateListaPruebaSubmit(e)}
+                onSubmit={(e) => void handleCreateListaSelectionSubmit(e)}
                 className="mt-5 space-y-4"
               >
                 <label className="flex flex-col gap-1">
                   <span className="text-xs font-semibold text-slate-600">Nombre de la lista</span>
                   <input
                     type="text"
-                    value={createListaPruebaNombre}
-                    onChange={(e) => setCreateListaPruebaNombre(e.target.value)}
+                    value={createListaSelectionNombre}
+                    onChange={(e) => setCreateListaSelectionNombre(e.target.value)}
                     className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm !text-slate-900 placeholder:text-slate-400 focus:border-purple/40 focus:outline-none focus:ring-2 focus:ring-purple/15"
-                    placeholder="Ej. QA plantilla marzo"
+                    placeholder={isPruebas ? "Ej. QA plantilla marzo" : "Ej. Influencers Q2"}
                     maxLength={255}
                     autoComplete="off"
                     autoFocus
-                    disabled={createListaPruebaSaving}
+                    disabled={createListaSelectionSaving}
                   />
                 </label>
                 <label className="flex flex-col gap-1">
                   <span className="text-xs font-semibold text-slate-600">Status</span>
                   <Select<ListOption, false, GroupBase<ListOption>>
-                    instanceId={`${selPrefix}create-lista-prueba-status`}
-                    inputId={`${selPrefix}create-lista-prueba-status-input`}
-                    classNamePrefix={`${selPrefix}react-select-lista-prueba-modal`}
+                    instanceId={`${selPrefix}create-lista-selection-status`}
+                    inputId={`${selPrefix}create-lista-selection-status-input`}
+                    classNamePrefix={`${selPrefix}react-select-lista-selection-modal`}
                     styles={selectListStyles}
                     options={LISTA_STATUS_MODAL}
-                    value={createListaPruebaStatus}
+                    value={createListaSelectionStatus}
                     onChange={(opt: SingleValue<ListOption>) =>
-                      setCreateListaPruebaStatus(opt ?? LISTA_STATUS_MODAL[0])
+                      setCreateListaSelectionStatus(opt ?? LISTA_STATUS_MODAL[0])
                     }
-                    isDisabled={createListaPruebaSaving}
+                    isDisabled={createListaSelectionSaving}
                     menuPosition="fixed"
                     menuPortalTarget={typeof document !== "undefined" ? document.body : null}
                   />
@@ -2500,18 +2625,18 @@ export function CreadoresPage({ mode = "production" }: { mode?: CreadoresPageMod
                 <div className="flex justify-end gap-2 pt-1">
                   <button
                     type="button"
-                    disabled={createListaPruebaSaving}
-                    onClick={() => setCreateListaPruebaOpen(false)}
+                    disabled={createListaSelectionSaving}
+                    onClick={() => setCreateListaSelectionOpen(false)}
                     className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                   >
                     Cancelar
                   </button>
                   <button
                     type="submit"
-                    disabled={createListaPruebaSaving}
+                    disabled={createListaSelectionSaving}
                     className="rounded-lg bg-purple px-4 py-2 text-sm font-semibold text-white hover:bg-purple/90 disabled:opacity-50"
                   >
-                    {createListaPruebaSaving ? "Creando…" : "Crear y agregar creadores"}
+                    {createListaSelectionSaving ? "Creando…" : "Crear y agregar creadores"}
                   </button>
                 </div>
               </form>
